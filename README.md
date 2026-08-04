@@ -19,7 +19,7 @@ A modern, full-stack project management platform (Jira/Linear-style) built with 
                      │              │────▶│  Port 8081       │
                      │              │     ├──────────────────┤
                      └──────────────┘     │  search-service  │
-                                          │  FastAPI + Python │
+                                          │ FastAPI + Python │
                                           │  Port 8000       │
                                           │  pgvector + AI   │
                                           └──────────────────┘
