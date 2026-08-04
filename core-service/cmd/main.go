@@ -1,0 +1,103 @@
+package main
+
+import (
+	"log"
+	"os"
+	"strconv"
+
+	"github.com/dipto-kainin/kai"
+	"github.com/taskforge/core-service/internal/db"
+	"github.com/taskforge/core-service/internal/handlers"
+	"github.com/taskforge/core-service/internal/middleware"
+)
+
+func main() {
+	// Connect to database
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://taskforge:taskforge_secret@localhost:5432/taskforge_core?sslmode=disable"
+	}
+
+	database, err := db.Connect(dbURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer database.Close()
+
+	if err := db.Migrate(database); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	// Get service URLs
+	jwksURL := os.Getenv("JWKS_URL")
+	if jwksURL == "" {
+		jwksURL = "http://localhost:8080/.well-known/jwks.json"
+	}
+	searchServiceURL := os.Getenv("SEARCH_SERVICE_URL")
+	if searchServiceURL == "" {
+		searchServiceURL = "http://localhost:8000"
+	}
+	gatewayNotifyURL := os.Getenv("GATEWAY_NOTIFY_URL")
+	if gatewayNotifyURL == "" {
+		gatewayNotifyURL = "http://localhost:4000/internal/notify"
+	}
+
+	// Create app
+	app := kai.NewApp()
+
+	// Global middleware
+	app.Use(kai.Logger(), kai.DamageControl(), kai.Pain_of_CORS())
+
+	// Health check
+	app.GET("/health", func(c *kai.Context) {
+		c.JSON(200, map[string]string{"status": "ok"})
+	})
+
+	// Initialize handlers
+	h := handlers.New(database, searchServiceURL, gatewayNotifyURL)
+
+	// Auth middleware
+	authMW := middleware.JWKSAuth(jwksURL)
+
+	// API routes
+	api := app.Group("/api")
+
+	// Project routes
+	api.POST("/projects", authMW, h.CreateProject)
+	api.GET("/orgs/:orgId/projects", authMW, h.ListProjects)
+	api.GET("/projects/:id", authMW, h.GetProject)
+
+	// Board routes
+	api.GET("/projects/:id/board", authMW, h.GetBoard)
+
+	// Sprint routes
+	api.POST("/projects/:id/sprints", authMW, h.CreateSprint)
+	api.PATCH("/sprints/:id", authMW, h.UpdateSprint)
+
+	// Issue routes
+	api.POST("/issues", authMW, h.CreateIssue)
+	api.GET("/issues/:id", authMW, h.GetIssue)
+	api.PATCH("/issues/:id", authMW, h.UpdateIssue)
+
+	// Comment routes
+	api.POST("/issues/:id/comments", authMW, h.CreateComment)
+	api.GET("/issues/:id/comments", authMW, h.ListComments)
+
+	// Label routes
+	api.POST("/issues/:id/labels", authMW, h.AddLabel)
+	api.GET("/projects/:id/labels", authMW, h.ListLabels)
+	api.POST("/projects/:id/labels", authMW, h.CreateLabel)
+
+	// Attachment routes
+	api.POST("/issues/:id/attachments", authMW, h.CreateAttachment)
+
+	port := 8081
+	if p := os.Getenv("PORT"); p != "" {
+		port, _ = strconv.Atoi(p)
+	}
+
+	log.Printf("core-service starting on port %d", port)
+	if err := app.Play(port); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
+}

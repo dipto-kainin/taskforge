@@ -1,0 +1,268 @@
+type Query {
+  me: User
+  organizations: [Organization!]!
+  organization(id: ID!): Organization
+  project(id: ID!): Project
+  projects(orgId: ID!): [Project!]!
+  board(projectId: ID!): Board
+  issue(id: ID!): Issue
+  sprints(projectId: ID!): [Sprint!]!
+  labels(projectId: ID!): [Label!]!
+  search(query: String!, projectId: String): [SearchResult!]!
+}
+
+type Mutation {
+  register(input: RegisterInput!): AuthPayload!
+  login(input: LoginInput!): AuthPayload!
+  refreshToken(refreshToken: String!): TokenPayload!
+
+  createOrganization(input: CreateOrgInput!): Organization!
+  inviteToOrg(orgId: ID!, email: String!, role: String): InviteResult!
+  createTeam(orgId: ID!, name: String!): Team!
+
+  createProject(input: CreateProjectInput!): Project!
+  createSprint(projectId: ID!, input: CreateSprintInput!): Sprint!
+  updateSprint(id: ID!, status: String!): Sprint!
+
+  createIssue(input: CreateIssueInput!): Issue!
+  updateIssue(id: ID!, input: UpdateIssueInput!): Issue!
+
+  createComment(issueId: ID!, body: String!): Comment!
+  createLabel(projectId: ID!, name: String!, color: String): Label!
+  addLabelToIssue(issueId: ID!, labelId: ID!): Boolean!
+
+  duplicateCheck(input: DuplicateCheckInput!): DuplicateCheckResult!
+  suggestLabels(input: SuggestLabelsInput!): SuggestLabelsResult!
+  summarizeComments(issueId: ID!, comments: [CommentInput!]!): SummaryResult!
+}
+
+type Subscription {
+  notificationReceived(projectId: String!): Notification!
+}
+
+# ---- Input Types ----
+
+input RegisterInput {
+  email: String!
+  password: String!
+  name: String!
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+input CreateOrgInput {
+  name: String!
+  slug: String!
+}
+
+input CreateProjectInput {
+  orgId: ID!
+  key: String!
+  name: String!
+  description: String
+}
+
+input CreateSprintInput {
+  name: String!
+  startDate: String
+  endDate: String
+}
+
+input CreateIssueInput {
+  projectId: ID!
+  title: String!
+  description: String
+  type: String
+  priority: String
+  assigneeId: ID
+  sprintId: ID
+  storyPoints: Int
+  parentIssueId: ID
+}
+
+input UpdateIssueInput {
+  title: String
+  description: String
+  status: String
+  columnId: ID
+  assigneeId: ID
+  sprintId: ID
+  priority: String
+  storyPoints: Int
+}
+
+input DuplicateCheckInput {
+  title: String!
+  description: String
+  projectId: ID!
+  threshold: Float
+}
+
+input SuggestLabelsInput {
+  title: String!
+  description: String
+  projectId: ID!
+}
+
+input CommentInput {
+  id: ID
+  authorId: String
+  body: String!
+  createdAt: String
+}
+
+# ---- Types ----
+
+type AuthPayload {
+  accessToken: String!
+  refreshToken: String!
+  userId: String!
+  email: String!
+  name: String!
+}
+
+type TokenPayload {
+  accessToken: String!
+  refreshToken: String!
+}
+
+type User {
+  id: ID!
+  email: String!
+  name: String!
+  avatarUrl: String
+}
+
+type Organization {
+  id: ID!
+  name: String!
+  slug: String!
+  createdAt: String
+  members: [OrgMember!]
+}
+
+type OrgMember {
+  id: ID!
+  email: String!
+  name: String!
+  avatarUrl: String
+  role: String!
+}
+
+type InviteResult {
+  message: String!
+  role: String!
+}
+
+type Team {
+  id: ID!
+  name: String!
+}
+
+type Project {
+  id: ID!
+  orgId: ID!
+  key: String!
+  name: String!
+  description: String
+  createdAt: String
+}
+
+type Board {
+  id: ID!
+  name: String!
+  columns: [Column!]!
+}
+
+type Column {
+  id: ID!
+  name: String!
+  position: Int!
+  issues: [Issue!]!
+}
+
+type Sprint {
+  id: ID!
+  projectId: ID!
+  name: String!
+  startDate: String
+  endDate: String
+  status: String!
+}
+
+type Issue {
+  id: ID!
+  projectId: ID!
+  key: String!
+  title: String!
+  description: String
+  type: String!
+  status: String!
+  priority: String!
+  assigneeId: ID
+  reporterId: ID!
+  sprintId: ID
+  columnId: ID
+  storyPoints: Int
+  parentIssueId: ID
+  createdAt: String
+  updatedAt: String
+  labels: [Label!]
+  comments: [Comment!]
+  assignee: User
+  reporter: User
+}
+
+type Comment {
+  id: ID!
+  issueId: ID
+  authorId: ID!
+  body: String!
+  createdAt: String
+  author: User
+}
+
+type Label {
+  id: ID!
+  name: String!
+  color: String!
+}
+
+type SearchResult {
+  issueId: ID!
+  projectId: ID!
+  title: String!
+  description: String
+  similarity: Float!
+}
+
+type Notification {
+  issueId: ID!
+  projectId: ID!
+  eventType: String!
+  data: String
+}
+
+type DuplicateCheckResult {
+  isDuplicate: Boolean!
+  matches: [SearchResult!]!
+}
+
+type SuggestLabelsResult {
+  suggestions: [LabelSuggestion!]!
+}
+
+type LabelSuggestion {
+  id: ID!
+  name: String!
+  color: String!
+  score: Float!
+}
+
+type SummaryResult {
+  summary: String!
+  commentCount: Int!
+}

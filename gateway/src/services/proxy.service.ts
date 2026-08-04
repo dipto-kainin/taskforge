@@ -1,0 +1,258 @@
+import { Injectable } from '@nestjs/common';
+import axios, { AxiosRequestConfig } from 'axios';
+
+@Injectable()
+export class ProxyService {
+  private authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:8080';
+  private coreUrl = process.env.CORE_SERVICE_URL || 'http://localhost:8081';
+  private searchUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:8000';
+
+  private getHeaders(context: any): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    const req = context?.req;
+    if (req?.headers?.authorization) {
+      headers['Authorization'] = req.headers.authorization;
+    }
+    return headers;
+  }
+
+  // ---- Auth Service ----
+
+  async register(input: any) {
+    const { data } = await axios.post(`${this.authUrl}/api/auth/register`, input);
+    return data;
+  }
+
+  async login(input: any) {
+    const { data } = await axios.post(`${this.authUrl}/api/auth/login`, input);
+    return data;
+  }
+
+  async refreshToken(refreshToken: string) {
+    const { data } = await axios.post(`${this.authUrl}/api/auth/refresh`, { refreshToken });
+    return data;
+  }
+
+  async getUser(userId: string) {
+    try {
+      const { data } = await axios.get(`${this.authUrl}/api/users/${userId}`);
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  async getOrganizations(context: any) {
+    const { data } = await axios.get(`${this.authUrl}/api/orgs`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async getOrganization(id: string, context: any) {
+    const { data } = await axios.get(`${this.authUrl}/api/orgs`, {
+      headers: this.getHeaders(context),
+    });
+    const org = data.find((o: any) => o.id === id);
+    return org || null;
+  }
+
+  async createOrganization(input: any, context: any) {
+    const { data } = await axios.post(`${this.authUrl}/api/orgs`, input, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async inviteToOrg(orgId: string, email: string, role: string, context: any) {
+    const { data } = await axios.post(
+      `${this.authUrl}/api/orgs/${orgId}/invite`,
+      { email, role },
+      { headers: this.getHeaders(context) },
+    );
+    return data;
+  }
+
+  async getOrgMembers(orgId: string, context: any) {
+    const { data } = await axios.get(`${this.authUrl}/api/orgs/${orgId}/members`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async createTeam(orgId: string, name: string, context: any) {
+    const { data } = await axios.post(
+      `${this.authUrl}/api/orgs/${orgId}/teams`,
+      { name },
+      { headers: this.getHeaders(context) },
+    );
+    return data;
+  }
+
+  // ---- Core Service ----
+
+  async getProjects(orgId: string, context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/orgs/${orgId}/projects`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async getProject(id: string, context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/projects/${id}`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async createProject(input: any, context: any) {
+    const { data } = await axios.post(`${this.coreUrl}/api/projects`, {
+      org_id: input.orgId,
+      key: input.key,
+      name: input.name,
+      description: input.description || '',
+    }, { headers: this.getHeaders(context) });
+    return data;
+  }
+
+  async getBoard(projectId: string, context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/projects/${projectId}/board`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async createSprint(projectId: string, input: any, context: any) {
+    const { data } = await axios.post(`${this.coreUrl}/api/projects/${projectId}/sprints`, {
+      name: input.name,
+      start_date: input.startDate,
+      end_date: input.endDate,
+    }, { headers: this.getHeaders(context) });
+    return data;
+  }
+
+  async updateSprint(id: string, status: string, context: any) {
+    const { data } = await axios.patch(`${this.coreUrl}/api/sprints/${id}`, { status }, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async getIssue(id: string, context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/issues/${id}`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async createIssue(input: any, context: any) {
+    const { data } = await axios.post(`${this.coreUrl}/api/issues`, {
+      project_id: input.projectId,
+      title: input.title,
+      description: input.description || '',
+      type: input.type || 'task',
+      priority: input.priority || 'medium',
+      assignee_id: input.assigneeId || '',
+      sprint_id: input.sprintId || '',
+      story_points: input.storyPoints,
+      parent_issue_id: input.parentIssueId || '',
+    }, { headers: this.getHeaders(context) });
+    return data;
+  }
+
+  async updateIssue(id: string, input: any, context: any) {
+    const body: any = {};
+    if (input.title !== undefined) body.title = input.title;
+    if (input.description !== undefined) body.description = input.description;
+    if (input.status !== undefined) body.status = input.status;
+    if (input.columnId !== undefined) body.column_id = input.columnId;
+    if (input.assigneeId !== undefined) body.assignee_id = input.assigneeId;
+    if (input.sprintId !== undefined) body.sprint_id = input.sprintId;
+    if (input.priority !== undefined) body.priority = input.priority;
+    if (input.storyPoints !== undefined) body.story_points = input.storyPoints;
+
+    await axios.patch(`${this.coreUrl}/api/issues/${id}`, body, {
+      headers: this.getHeaders(context),
+    });
+
+    // Return the updated issue
+    return this.getIssue(id, context);
+  }
+
+  async createComment(issueId: string, body: string, context: any) {
+    const { data } = await axios.post(`${this.coreUrl}/api/issues/${issueId}/comments`, { body }, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async getComments(issueId: string, context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/issues/${issueId}/comments`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async createLabel(projectId: string, name: string, color: string, context: any) {
+    const { data } = await axios.post(`${this.coreUrl}/api/projects/${projectId}/labels`, {
+      name,
+      color: color || '#6366f1',
+    }, { headers: this.getHeaders(context) });
+    return data;
+  }
+
+  async getLabels(projectId: string, context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/projects/${projectId}/labels`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async addLabelToIssue(issueId: string, labelId: string, context: any) {
+    await axios.post(`${this.coreUrl}/api/issues/${issueId}/labels`, {
+      label_id: labelId,
+    }, { headers: this.getHeaders(context) });
+    return true;
+  }
+
+  // ---- Search Service ----
+
+  async search(query: string, projectId: string | null, context: any) {
+    const params: any = { q: query };
+    if (projectId) params.project_id = projectId;
+    const { data } = await axios.get(`${this.searchUrl}/api/search`, {
+      params,
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async duplicateCheck(input: any) {
+    const { data } = await axios.post(`${this.searchUrl}/api/ai/duplicate-check`, {
+      title: input.title,
+      description: input.description || '',
+      project_id: input.projectId,
+      threshold: input.threshold || 0.7,
+    });
+    return data;
+  }
+
+  async suggestLabels(input: any) {
+    const { data } = await axios.post(`${this.searchUrl}/api/ai/suggest-labels`, {
+      title: input.title,
+      description: input.description || '',
+      project_id: input.projectId,
+    });
+    return data;
+  }
+
+  async summarizeComments(issueId: string, comments: any[]) {
+    const { data } = await axios.post(`${this.searchUrl}/api/ai/summarize-comments`, {
+      issue_id: issueId,
+      comments,
+    });
+    return data;
+  }
+}
