@@ -360,7 +360,7 @@ cmd_logs() {
     echo -e "  ${CYAN}3${NC})  core-service     ${DIM}(Go / Kai)${NC}"
     echo -e "  ${CYAN}4${NC})  search-service   ${DIM}(Python / FastAPI)${NC}"
     echo -e "  ${CYAN}5${NC})  gateway          ${DIM}(TypeScript / NestJS)${NC}"
-    echo -e "  ${CYAN}6${NC})  frontend         ${DIM}(Next.js)${NC}"
+    echo -e "  ${CYAN}6${NC})  frontend         ${DIM}(Vite / React)${NC}"
     echo -e "  ${CYAN}7${NC})  postgres         ${DIM}(PostgreSQL)${NC}"
     echo -e "  ${CYAN}8${NC})  redis            ${DIM}(Redis)${NC}"
     echo ""
