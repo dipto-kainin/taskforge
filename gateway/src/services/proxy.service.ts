@@ -75,6 +75,23 @@ export class ProxyService {
     return data;
   }
 
+  async removeFromOrg(orgId: string, userId: string, context: any) {
+    const { data } = await axios.delete(
+      `${this.authUrl}/api/orgs/${orgId}/members/${userId}`,
+      { headers: this.getHeaders(context) },
+    );
+    return data;
+  }
+
+  async updateMemberRole(orgId: string, userId: string, role: string, context: any) {
+    const { data } = await axios.patch(
+      `${this.authUrl}/api/orgs/${orgId}/members/${userId}`,
+      { role },
+      { headers: this.getHeaders(context) },
+    );
+    return data;
+  }
+
   async getOrgMembers(orgId: string, context: any) {
     const { data } = await axios.get(`${this.authUrl}/api/orgs/${orgId}/members`, {
       headers: this.getHeaders(context),

@@ -62,6 +62,30 @@ export class AuthResolver {
     return { ...org, members };
   }
 
+  @Query()
+  async orgMembers(@Args('orgId') orgId: string, @Context() context: any) {
+    return this.proxy.getOrgMembers(orgId, context);
+  }
+
+  @Mutation()
+  async removeFromOrg(
+    @Args('orgId') orgId: string,
+    @Args('userId') userId: string,
+    @Context() context: any,
+  ) {
+    await this.proxy.removeFromOrg(orgId, userId, context);
+    return true;
+  }
+
+  @Mutation()
+  async updateMemberRole(
+    @Args('orgId') orgId: string,
+    @Args('userId') userId: string,
+    @Args('role') role: string,
+    @Context() context: any,
+  ) {
+    return this.proxy.updateMemberRole(orgId, userId, role, context);
+  }
   @Mutation()
   async createOrganization(@Args('input') input: any, @Context() context: any) {
     return this.proxy.createOrganization(input, context);

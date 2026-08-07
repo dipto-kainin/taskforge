@@ -1,10 +1,14 @@
-export type Status = "backlog" | "todo" | "in_progress" | "done";
+export type Status = "backlog" | "todo" | "in_progress" | "in_review" | "done";
 export type Priority = "lowest" | "low" | "medium" | "high" | "urgent";
+export type OrgRole = "owner" | "admin" | "member";
 
 export interface User {
   id: string;
   name: string;
+  email?: string;
+  avatarUrl?: string | null | undefined;
   initials: string;
+  role?: OrgRole;
 }
 
 export interface Comment {
@@ -32,6 +36,7 @@ export interface Ticket {
 
 export interface Project {
   id: string;
+  orgId: string;
   key: string;
   name: string;
   description: string;
@@ -49,8 +54,12 @@ export const STATUSES: { id: Status; label: string }[] = [
   { id: "backlog", label: "Backlog" },
   { id: "todo", label: "To Do" },
   { id: "in_progress", label: "In Progress" },
+  { id: "in_review", label: "In Review" },
   { id: "done", label: "Done" },
 ];
+
+/** Columns rendered on the kanban board. Done lives behind the "completed" toggle. */
+export const BOARD_STATUSES = STATUSES.filter((s) => s.id !== "done");
 
 export const PRIORITIES: { id: Priority; label: string }[] = [
   { id: "urgent", label: "Urgent" },

@@ -1,6 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { User as UserIcon } from "lucide-react";
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -70,7 +73,7 @@ export function NewTicketDialog({
         .map((l) => l.trim())
         .filter(Boolean),
     });
-    toast.success(`Created ${ticket?.key ?? "ticket"}`);
+    toast.success(`Created ${ticket?.key ?? "issue"}`);
     reset();
     setOpen(false);
   };
@@ -86,8 +89,8 @@ export function NewTicketDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New ticket</DialogTitle>
-          <DialogDescription>Add work to the board. You can refine details later.</DialogDescription>
+          <DialogTitle>New issue</DialogTitle>
+          <DialogDescription>Add an issue to the board. You can edit every field later.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
@@ -96,17 +99,17 @@ export function NewTicketDialog({
               id="nt-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Short, action-oriented summary"
+              placeholder="Fix GraphQL user permissions endpoint"
               autoFocus
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="nt-desc">Description</Label>
+            <Label htmlFor="nt-desc">Details</Label>
             <Textarea
               id="nt-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Context, acceptance criteria, links"
+              placeholder="What needs to be done, requirements, links..."
               rows={3}
             />
           </div>
@@ -127,7 +130,7 @@ export function NewTicketDialog({
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Status</Label>
+              <Label>Board column</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as Status)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -159,14 +162,32 @@ export function NewTicketDialog({
             <div className="grid gap-2">
               <Label>Assignee</Label>
               <Select value={assigneeId} onValueChange={setAssigneeId}>
-                <SelectTrigger>
+                <SelectTrigger id="assignee-select-trigger">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">
+                    <span className="flex items-center gap-2">
+                      <UserIcon className="size-4 text-muted-foreground" />
+                      <span>Unassigned</span>
+                    </span>
+                  </SelectItem>
                   {users.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
-                      {u.name}
+                      <span className="flex items-center gap-2">
+                        <Avatar className="size-5 border border-foreground">
+                          <AvatarImage src={u.avatarUrl ?? undefined} />
+                          <AvatarFallback className="bg-primary text-[0.6rem] font-bold">
+                            {u.initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{u.name}</span>
+                        {u.role && (
+                          <Badge variant="outline" className="text-[0.6rem] uppercase py-0 px-1 border-foreground">
+                            {u.role}
+                          </Badge>
+                        )}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -174,12 +195,12 @@ export function NewTicketDialog({
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="nt-labels">Labels</Label>
+            <Label htmlFor="nt-labels">Tags</Label>
             <Input
               id="nt-labels"
               value={labels}
               onChange={(e) => setLabels(e.target.value)}
-              placeholder="design, bug (comma separated)"
+              placeholder="beast, escort (comma separated)"
             />
           </div>
         </div>
@@ -187,7 +208,7 @@ export function NewTicketDialog({
           <Button variant="ghost" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={submit}>Create ticket</Button>
+          <Button onClick={submit}>Create issue</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,33 +1,36 @@
 import type { Comment, Priority, Project, Status, Ticket, TrackerData, User } from "./types";
 
 const users: User[] = [
-  { id: "u1", name: "Maya Rivera", initials: "MR" },
-  { id: "u2", name: "Devan Shah", initials: "DS" },
-  { id: "u3", name: "Iris Kowalski", initials: "IK" },
-  { id: "u4", name: "Tom Berger", initials: "TB" },
-  { id: "u5", name: "Nadia Osei", initials: "NO" },
+  { id: "u1", name: "Maya Reyes", initials: "MR" },
+  { id: "u2", name: "Dan Ashford", initials: "DA" },
+  { id: "u3", name: "Isabel Nunes", initials: "IN" },
+  { id: "u4", name: "Tor Grimsby", initials: "TG" },
+  { id: "u5", name: "Nadia Ember", initials: "NE" },
 ];
 
 const projects: Project[] = [
   {
     id: "p1",
+    orgId: "org-demo",
     key: "WEB",
-    name: "Website Revamp",
-    description: "Marketing site rebuild, new design system and CMS migration.",
+    name: "Marketing Website",
+    description: "Public site, landing pages and the content pipeline.",
     counter: 0,
   },
   {
     id: "p2",
+    orgId: "org-demo",
     key: "APP",
     name: "Mobile App",
-    description: "iOS and Android client for the customer portal.",
+    description: "iOS and Android client, offline sync and release trains.",
     counter: 0,
   },
   {
     id: "p3",
-    key: "OPS",
-    name: "Platform Ops",
-    description: "Infrastructure, observability and release tooling.",
+    orgId: "org-demo",
+    key: "PLT",
+    name: "Platform",
+    description: "APIs, infrastructure, billing and internal tooling.",
     counter: 0,
   },
 ];
@@ -36,41 +39,41 @@ type Row = [string, string, Status, Priority, string | null, string[]];
 
 const rows: Record<string, Row[]> = {
   p1: [
-    ["Rewrite pricing page copy", "Tighten the value props and add a comparison table.", "in_progress", "high", "u1", ["content"]],
-    ["Design system: color tokens", "Define semantic tokens for light and dark surfaces.", "done", "medium", "u3", ["design", "foundation"]],
-    ["Migrate blog to new CMS", "Move 140 posts, preserve slugs and redirects.", "todo", "high", "u2", ["cms"]],
-    ["Fix layout shift on hero", "LCP image needs explicit dimensions.", "in_progress", "urgent", "u4", ["perf", "bug"]],
-    ["Add customer logo wall", "Six logos, grayscale with hover color.", "backlog", "low", null, ["design"]],
-    ["Cookie banner compliance", "Consent categories and storage of preferences.", "todo", "medium", "u5", ["legal"]],
-    ["Sitemap + robots audit", "Ensure new routes are indexed correctly.", "backlog", "lowest", "u2", ["seo"]],
-    ["Careers page template", "Reusable job posting layout with structured data.", "done", "low", "u1", ["seo"]],
-    ["Contact form spam filter", "Honeypot plus rate limiting.", "backlog", "medium", "u4", ["bug"]],
+    ["Rebuild the pricing page", "New tiers, annual toggle and a comparison table.", "in_progress", "high", "u1", ["frontend"]],
+    ["Fix layout shift on hero image", "CLS is 0.28 on mobile. Reserve space for the hero.", "in_review", "medium", "u3", ["perf", "bug"]],
+    ["Migrate blog to MDX", "Move 42 posts and keep existing URLs intact.", "todo", "high", "u2", ["content"]],
+    ["Add cookie consent banner", "Region-aware, blocks analytics until accepted.", "in_progress", "urgent", "u4", ["legal"]],
+    ["Audit page metadata", "Titles, descriptions and OG images across all routes.", "backlog", "low", null, ["seo"]],
+    ["Dark mode for docs", "Respect system preference with a manual override.", "todo", "medium", "u5", ["frontend"]],
+    ["Compress marketing imagery", "Ship AVIF with JPEG fallbacks.", "backlog", "lowest", "u2", ["perf"]],
+    ["Ship the changelog page", "Pulls entries from the release notes feed.", "done", "low", "u1", ["frontend"]],
+    ["Broken links in the footer", "Three legacy links 404 after the docs move.", "in_review", "medium", "u4", ["bug"]],
   ],
   p2: [
-    ["Offline mode for order list", "Cache last 50 orders and sync on reconnect.", "in_progress", "urgent", "u2", ["mobile", "sync"]],
-    ["Push notification opt-in", "Ask after the second successful order.", "todo", "medium", "u5", ["growth"]],
-    ["Crash on Android 13 launch", "Null reference in the session bootstrap.", "in_progress", "urgent", "u4", ["bug"]],
-    ["Biometric unlock", "Face ID and fingerprint for returning users.", "backlog", "high", "u3", ["security"]],
-    ["Dark theme pass", "Audit every screen against the new tokens.", "todo", "low", "u1", ["design"]],
-    ["Reduce cold start time", "Defer analytics SDK initialisation.", "done", "high", "u2", ["perf"]],
-    ["In-app changelog", "Show release notes after an update.", "backlog", "lowest", null, []],
+    ["Offline sync conflicts", "Last-write-wins loses edits. Needs a merge strategy.", "in_progress", "urgent", "u2", ["sync", "bug"]],
+    ["Push notification opt-in flow", "Ask after first meaningful action, not on launch.", "todo", "medium", "u5", ["ux"]],
+    ["Crash on Android 13 cold start", "Null intent extras when launched from a widget.", "in_progress", "urgent", "u4", ["bug", "android"]],
+    ["Biometric unlock", "Face ID and fingerprint behind a settings toggle.", "backlog", "high", "u3", ["security"]],
+    ["Reduce app bundle size", "Currently 74MB. Target under 45MB.", "in_review", "low", "u1", ["perf"]],
+    ["Rewrite onboarding screens", "Three steps instead of six, skippable.", "done", "high", "u2", ["ux"]],
+    ["Automate release notes", "Generate from merged PR labels.", "backlog", "lowest", null, ["tooling"]],
   ],
   p3: [
-    ["Blue/green deploys", "Cut over traffic without downtime.", "in_progress", "high", "u4", ["infra"]],
-    ["Alert fatigue cleanup", "Delete 30 noisy alerts, tune thresholds.", "todo", "medium", "u5", ["observability"]],
-    ["Nightly backup verification", "Restore into a scratch environment weekly.", "backlog", "high", "u2", ["infra", "risk"]],
-    ["Terraform state locking", "Move state to remote backend with locks.", "done", "urgent", "u4", ["infra"]],
-    ["Cost dashboard", "Break down spend by service and environment.", "backlog", "low", "u3", ["finops"]],
-    ["Rotate service credentials", "Quarterly rotation with automation.", "todo", "medium", "u1", ["security"]],
+    ["Rate limit the public API", "Token bucket per key, 429 with retry headers.", "in_progress", "high", "u4", ["api"]],
+    ["Rotate database credentials", "Move secrets into the vault and rotate quarterly.", "todo", "medium", "u5", ["security"]],
+    ["Invoice PDF generation", "Queue-based, retried, stored in object storage.", "backlog", "high", "u2", ["billing"]],
+    ["Restore point-in-time backups", "Verified restore drill for the primary cluster.", "done", "urgent", "u4", ["infra"]],
+    ["Onboarding runbook for new hires", "Access, environments and the deploy process.", "backlog", "low", "u3", ["docs"]],
+    ["Add tracing to the worker pool", "Spans for every job with queue latency.", "in_review", "medium", "u1", ["observability"]],
   ],
 };
 
 const bodies = [
-  "Pulled this into the current cycle — happy to pair on it tomorrow.",
-  "I reproduced it on staging. Attaching steps in the description.",
-  "Blocked until the design tokens land, otherwise we redo the work twice.",
-  "Scope looks right. Let's keep the follow-up work in a separate ticket.",
-  "Shipped behind a flag, will roll out to 10% first.",
+  "Picked this up — I'll open a draft PR before the end of the day.",
+  "Reproduced on staging. Adding a regression test alongside the fix.",
+  "Blocked until the design tokens land, otherwise we redo this twice.",
+  "Scope looks right. Anything beyond this goes into a follow-up ticket.",
+  "Half done and deployed behind a flag. Keeping it off in production for now.",
 ];
 
 export function createSeedData(): TrackerData {

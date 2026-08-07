@@ -23,15 +23,15 @@ import { PRIORITIES, STATUSES, type Priority, type Status } from "@/lib/tracker/
 export const Route = createFileRoute("/projects/$projectId/tickets/$ticketId")({
   head: () => ({
     meta: [
-      { title: "Ticket details — Flightdeck" },
+      { title: "Issue Details | Blockwork" },
       {
         name: "description",
-        content: "Edit the ticket description, status, priority, assignee, labels and comments.",
+        content: "Edit the issue: description, status, priority, assignee and the discussion thread.",
       },
-      { property: "og:title", content: "Ticket details — Flightdeck" },
+      { property: "og:title", content: "Issue Details | Blockwork" },
       {
         property: "og:description",
-        content: "Edit ticket details and discuss the work with your team.",
+        content: "Edit the issue and discuss it with your team.",
       },
     ],
   }),
@@ -52,10 +52,10 @@ function TicketPage() {
   if (!ticket || !project) {
     return (
       <div className="mx-auto max-w-md py-20 text-center">
-        <h1 className="text-xl font-semibold">Ticket not found</h1>
-        <p className="mt-2 text-sm text-muted-foreground">It may have been deleted.</p>
+        <h1 className="text-xl font-semibold">Issue not found</h1>
+        <p className="mt-2 text-sm text-muted-foreground">This issue no longer exists.</p>
         <Button asChild className="mt-4">
-          <Link to="/">Back to dashboard</Link>
+          <Link to="/">Back home</Link>
         </Button>
       </div>
     );
@@ -86,12 +86,12 @@ function TicketPage() {
           className="text-destructive hover:text-destructive"
           onClick={() => {
             deleteTicket(ticket.id);
-            toast.success(`Deleted ${ticket.key}`);
+            toast.success(`Struck ${ticket.key} from the rolls`);
             navigate({ to: "/projects/$projectId/board", params: { projectId } });
           }}
         >
           <Trash2 className="size-4" />
-          Delete
+          Burn scroll
         </Button>
       </div>
 
@@ -103,17 +103,17 @@ function TicketPage() {
               value={ticket.title}
               onChange={(e) => updateTicket(ticket.id, { title: e.target.value })}
               className="mt-1 w-full rounded-md border border-transparent bg-transparent px-2 py-1 font-display text-2xl font-semibold outline-none transition-colors hover:border-border focus:border-ring"
-              aria-label="Ticket title"
+              aria-label="Issue title"
             />
           </div>
 
           <section className="space-y-2">
-            <h2 className="label-caps">Description</h2>
+            <h2 className="label-caps">Contract terms</h2>
             <Textarea
               value={ticket.description}
               onChange={(e) => updateTicket(ticket.id, { description: e.target.value })}
               rows={5}
-              placeholder="Add context, acceptance criteria or links…"
+              placeholder="Terms, reward, known dangers…"
             />
           </section>
 
@@ -123,7 +123,7 @@ function TicketPage() {
               {thread.map((c) => {
                 const author = users.find((u) => u.id === c.authorId);
                 return (
-                  <li key={c.id} className="flex gap-3 rounded-xl border border-border bg-card p-3">
+                  <li key={c.id} className="flex gap-3 rounded-sm border border-border bg-surface/60 p-3">
                     <Assignee id={c.authorId} />
                     <div className="min-w-0">
                       <p className="text-sm font-medium">
@@ -140,8 +140,8 @@ function TicketPage() {
                 );
               })}
               {thread.length === 0 && (
-                <li className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                  No comments yet.
+                <li className="rounded-sm border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                  No notes pinned to this contract yet.
                 </li>
               )}
             </ul>
@@ -154,16 +154,16 @@ function TicketPage() {
               />
               <div className="flex justify-end">
                 <Button size="sm" onClick={postComment}>
-                  Comment
+                  Post note
                 </Button>
               </div>
             </div>
           </section>
         </div>
 
-        <aside className="space-y-4 rounded-xl border border-border bg-card p-4">
+        <aside className="space-y-4 rounded-sm border border-border bg-surface/60 p-4">
           <div className="space-y-1.5">
-            <Label>Status</Label>
+            <Label>Pillar</Label>
             <Select
               value={ticket.status}
               onValueChange={(v) => updateTicket(ticket.id, { status: v as Status })}
@@ -182,7 +182,7 @@ function TicketPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Priority</Label>
+            <Label>Skulls of danger</Label>
             <Select
               value={ticket.priority}
               onValueChange={(v) => updateTicket(ticket.id, { priority: v as Priority })}
@@ -212,7 +212,7 @@ function TicketPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
+                <SelectItem value="unassigned">Unclaimed</SelectItem>
                 {users.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
                     {u.name}
@@ -223,13 +223,13 @@ function TicketPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Labels</Label>
+            <Label>Tags</Label>
             {editingLabels ? (
               <div className="flex gap-2">
                 <Input
                   value={labelDraft}
                   onChange={(e) => setLabelDraft(e.target.value)}
-                  placeholder="design, bug"
+                  placeholder="beast, escort"
                   className="h-9"
                 />
                 <Button

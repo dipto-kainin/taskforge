@@ -4,6 +4,7 @@ type Query {
   organization(id: ID!): Organization
   project(id: ID!): Project
   projects(orgId: ID!): [Project!]!
+  orgMembers(orgId: ID!): [OrgMember!]!
   board(projectId: ID!): Board
   issue(id: ID!): Issue
   sprints(projectId: ID!): [Sprint!]!
@@ -18,6 +19,8 @@ type Mutation {
 
   createOrganization(input: CreateOrgInput!): Organization!
   inviteToOrg(orgId: ID!, email: String!, role: String): InviteResult!
+  removeFromOrg(orgId: ID!, userId: ID!): Boolean!
+  updateMemberRole(orgId: ID!, userId: ID!, role: String!): OrgMember!
   createTeam(orgId: ID!, name: String!): Team!
 
   createProject(input: CreateProjectInput!): Project!

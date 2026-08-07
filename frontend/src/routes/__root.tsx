@@ -4,10 +4,12 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ArrowRight, Blocks } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -16,7 +18,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "@/components/tracker/app-sidebar";
 import { TopBar } from "@/components/tracker/top-bar";
 import { TrackerProvider } from "@/lib/tracker/store";
-import { AuthProvider } from "@/lib/auth-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui/button";
+import { BlockWorkLogo } from "@/components/tracker/logo";
 
 function NotFoundComponent() {
   return (
@@ -83,19 +87,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Flightdeck — Ticket Tracker" },
+      { title: "Block Work — Issue Tracker" },
       {
         name: "description",
-        content: "Kanban boards, backlogs and ticket tracking for small product teams.",
+        content: "A bold, airy issue tracker with kanban boards, backlogs and personal work stats.",
       },
-      { property: "og:title", content: "Flightdeck — Ticket Tracker" },
+      { property: "og:title", content: "Block Work — Issue Tracker" },
       {
         property: "og:description",
-        content: "Kanban boards, backlogs and ticket tracking for small product teams.",
+        content: "A bold, airy issue tracker with kanban boards, backlogs and personal work stats.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
@@ -106,7 +109,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
@@ -119,16 +122,109 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         {children}
         <Scripts />
       </body>
     </html>
   );
+}
+
+/** Full sidebar + content layout shown to authenticated users */
+function AuthenticatedApp() {
+  return (
+    <TrackerProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="min-w-0">
+          <TopBar />
+          <main className="nb-grid min-w-0 flex-1 p-6 md:p-10">
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+      <Toaster />
+    </TrackerProvider>
+  );
+}
+
+/** Neo-brutalist login wall shown to unauthenticated visitors */
+function LandingWall() {
+  return (
+    <div className="nb-grid flex min-h-screen flex-col">
+      {/* Nav */}
+      <header className="flex items-center justify-between border-b-2 border-foreground bg-card px-6 py-4">
+        <BlockWorkLogo size="md" />
+        <Button asChild variant="outline" className="nb-sm font-semibold">
+          <Link to="/login">Sign in</Link>
+        </Button>
+      </header>
+
+      {/* Hero */}
+      <main className="flex flex-1 flex-col items-center justify-center px-6 py-20 text-center">
+        <p className="label-caps mb-4">Project management, reimagined</p>
+        <h1 className="font-display text-5xl uppercase leading-tight md:text-7xl lg:text-8xl">
+          Ship work.
+          <br />
+          <span className="bg-primary px-2">Track it.</span>
+        </h1>
+        <p className="mt-8 max-w-xl text-lg text-muted-foreground">
+          Kanban boards, backlogs, assignees and real-time updates — all in one brutally simple workspace.
+        </p>
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+          <Button asChild size="lg" className="nb nb-hover gap-2 font-display text-base uppercase">
+            <Link to="/login">
+              Get started <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </div>
+
+        {/* Feature chips */}
+        <div className="mt-16 flex flex-wrap justify-center gap-3">
+          {["Kanban Boards", "Backlogs", "Assignees", "3-Level Roles", "Real-time Updates"].map((f) => (
+            <span key={f} className="nb-sm bg-secondary px-4 py-2 font-semibold text-sm">
+              {f}
+            </span>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/** Decides which shell to render based on auth state */
+function InnerApp() {
+  const auth = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || auth?.isLoading) {
+    return (
+      <div className="nb-grid flex min-h-screen items-center justify-center bg-background">
+        <div className="nb flex items-center gap-3 bg-card px-6 py-4">
+          <div className="size-4 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+          <span className="font-display text-sm uppercase">Loading Block Work…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!auth?.isAuthenticated) {
+    if (pathname === "/login") {
+      return <Outlet />;
+    }
+    return <LandingWall />;
+  }
+
+  return <AuthenticatedApp />;
 }
 
 function RootComponent() {
@@ -137,19 +233,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TrackerProvider>
-          <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset className="min-w-0">
-              <TopBar />
-              <main className="min-w-0 flex-1 p-4 md:p-6">
-                {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-                <Outlet />
-              </main>
-            </SidebarInset>
-          </SidebarProvider>
-          <Toaster />
-        </TrackerProvider>
+        <InnerApp />
       </AuthProvider>
     </QueryClientProvider>
   );

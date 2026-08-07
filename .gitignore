@@ -36,3 +36,6 @@ ENV/
 # Environment files
 .env
 .env.local
+
+# Dev mode logs
+.dev-logs/

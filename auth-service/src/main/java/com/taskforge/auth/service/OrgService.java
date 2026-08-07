@@ -102,6 +102,53 @@ public class OrgService {
         return teamRepository.save(new Team(org, teamName));
     }
 
+    @Transactional
+    public void removeMember(UUID orgId, UUID targetUserId, UUID callerUserId) {
+        OrgMembership callerMembership = membershipRepository.findByUserIdAndOrganizationId(callerUserId, orgId)
+                .orElseThrow(() -> new IllegalArgumentException("You are not a member of this organization"));
+
+        if (callerMembership.getRole() == OrgMembership.OrgRole.member) {
+            throw new IllegalArgumentException("Only owners and admins can remove members");
+        }
+
+        OrgMembership targetMembership = membershipRepository.findByUserIdAndOrganizationId(targetUserId, orgId)
+                .orElseThrow(() -> new IllegalArgumentException("Target user is not a member"));
+
+        // Admins cannot remove owners or other admins
+        if (callerMembership.getRole() == OrgMembership.OrgRole.admin &&
+                targetMembership.getRole() != OrgMembership.OrgRole.member) {
+            throw new IllegalArgumentException("Admins can only remove members");
+        }
+
+        // Cannot remove yourself if you are the only owner
+        if (targetUserId.equals(callerUserId) &&
+                targetMembership.getRole() == OrgMembership.OrgRole.owner) {
+            long ownerCount = membershipRepository.findByOrganizationId(orgId).stream()
+                    .filter(m -> m.getRole() == OrgMembership.OrgRole.owner).count();
+            if (ownerCount <= 1) {
+                throw new IllegalArgumentException("Cannot remove the only owner");
+            }
+        }
+
+        membershipRepository.delete(targetMembership);
+    }
+
+    @Transactional
+    public OrgMembership updateMemberRole(UUID orgId, UUID targetUserId, OrgMembership.OrgRole newRole, UUID callerUserId) {
+        OrgMembership callerMembership = membershipRepository.findByUserIdAndOrganizationId(callerUserId, orgId)
+                .orElseThrow(() -> new IllegalArgumentException("You are not a member of this organization"));
+
+        if (callerMembership.getRole() != OrgMembership.OrgRole.owner) {
+            throw new IllegalArgumentException("Only owners can change member roles");
+        }
+
+        OrgMembership targetMembership = membershipRepository.findByUserIdAndOrganizationId(targetUserId, orgId)
+                .orElseThrow(() -> new IllegalArgumentException("Target user is not a member"));
+
+        targetMembership.setRole(newRole);
+        return membershipRepository.save(targetMembership);
+    }
+
     public List<Team> getTeams(UUID orgId) {
         return teamRepository.findByOrganizationId(orgId);
     }

@@ -90,7 +90,41 @@ public class OrgController {
         return ResponseEntity.ok(orgService.getMembers(orgId));
     }
 
+    public record UpdateRoleRequest(
+            @NotBlank String role
+    ) {}
+
+    @DeleteMapping("/{orgId}/members/{userId}")
+    public ResponseEntity<?> removeMember(@PathVariable UUID orgId,
+                                          @PathVariable UUID userId,
+                                          @AuthenticationPrincipal JwtAuthFilter.UserPrincipal principal) {
+        try {
+            orgService.removeMember(orgId, userId, principal.getId());
+            return ResponseEntity.ok(Map.of("message", "Member removed"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/{orgId}/members/{userId}")
+    public ResponseEntity<?> updateMemberRole(@PathVariable UUID orgId,
+                                              @PathVariable UUID userId,
+                                              @Valid @RequestBody UpdateRoleRequest req,
+                                              @AuthenticationPrincipal JwtAuthFilter.UserPrincipal principal) {
+        try {
+            OrgMembership.OrgRole role = OrgMembership.OrgRole.valueOf(req.role());
+            var membership = orgService.updateMemberRole(orgId, userId, role, principal.getId());
+            return ResponseEntity.ok(Map.of(
+                    "id", membership.getUser().getId(),
+                    "role", membership.getRole().name()
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping("/{orgId}/teams")
+
     public ResponseEntity<?> createTeam(@PathVariable UUID orgId,
                                         @Valid @RequestBody CreateTeamRequest req,
                                         @AuthenticationPrincipal JwtAuthFilter.UserPrincipal principal) {

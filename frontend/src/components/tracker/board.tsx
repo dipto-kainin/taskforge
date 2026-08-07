@@ -17,12 +17,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus } from "lucide-react";
+import { CheckCircle2, ChevronDown, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useTracker } from "@/lib/tracker/store";
-import { STATUSES, type Status, type Ticket } from "@/lib/tracker/types";
+import { BOARD_STATUSES, type Status, type Ticket } from "@/lib/tracker/types";
 import { cn } from "@/lib/utils";
 import { NewTicketDialog } from "./new-ticket-dialog";
 import { TicketCard } from "./ticket-card";
@@ -62,11 +62,11 @@ function Column({
   const { setNodeRef, isOver } = useDroppable({ id: `column:${status}`, data: { status } });
 
   return (
-    <section className="flex min-w-[15rem] flex-1 basis-0 flex-col rounded-xl bg-surface/70">
-      <header className="flex items-center justify-between px-3 py-2.5">
+    <section className="flex min-w-[15rem] flex-1 basis-0 flex-col">
+      <header className="nb-flat flex items-center justify-between gap-2 px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <h2 className="label-caps">{label}</h2>
-          <span className="rounded-full bg-card px-1.5 text-[0.6875rem] text-muted-foreground">
+          <h2 className="font-display text-xs uppercase tracking-wider">{label}</h2>
+          <span className="border-2 border-foreground bg-secondary px-1.5 text-[0.6875rem] font-bold">
             {tickets.length}
           </span>
         </div>
@@ -74,7 +74,7 @@ function Column({
           projectId={projectId}
           defaultStatus={status}
           trigger={
-            <Button variant="ghost" size="icon" className="size-6" aria-label={`Add to ${label}`}>
+            <Button variant="ghost" size="icon" className="size-6" aria-label={`New issue in ${label}`}>
               <Plus className="size-4" />
             </Button>
           }
@@ -83,8 +83,8 @@ function Column({
       <div
         ref={setNodeRef}
         className={cn(
-          "flex min-h-32 flex-1 flex-col gap-2 rounded-b-xl border border-transparent p-2 transition-colors",
-          isOver && "border-ring/50 bg-accent/50",
+          "flex min-h-40 flex-1 flex-col gap-4 border-2 border-t-0 border-dashed border-foreground/30 p-3 transition-colors",
+          isOver && "border-solid border-foreground bg-accent/30",
         )}
       >
         <SortableContext items={tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
@@ -93,8 +93,8 @@ function Column({
           ))}
         </SortableContext>
         {tickets.length === 0 && (
-          <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-            Drop tickets here
+          <p className="border-2 border-dashed border-foreground/25 p-6 text-center text-xs font-medium text-muted-foreground">
+            Drop an issue here
           </p>
         )}
       </div>
@@ -105,6 +105,7 @@ function Column({
 export function KanbanBoard({ projectId }: { projectId: string }) {
   const { tickets, comments, moveTicket } = useTracker();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showDone, setShowDone] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -113,7 +114,7 @@ export function KanbanBoard({ projectId }: { projectId: string }) {
 
   const columns = useMemo(() => {
     const projectTickets = tickets.filter((t) => t.projectId === projectId);
-    return STATUSES.map((s) => ({
+    return BOARD_STATUSES.map((s) => ({
       ...s,
       tickets: projectTickets
         .filter((t) => t.status === s.id)
@@ -123,6 +124,9 @@ export function KanbanBoard({ projectId }: { projectId: string }) {
 
   const countComments = (id: string) => comments.filter((c) => c.ticketId === id).length;
   const activeTicket = tickets.find((t) => t.id === activeId) ?? null;
+  const completed = tickets
+    .filter((t) => t.projectId === projectId && t.status === "done")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   const onDragStart = (event: DragStartEvent) => setActiveId(String(event.active.id));
 
@@ -158,7 +162,7 @@ export function KanbanBoard({ projectId }: { projectId: string }) {
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      <div className="flex gap-4 overflow-x-auto pb-2">
         {columns.map((c) => (
           <Column
             key={c.id}
@@ -176,10 +180,35 @@ export function KanbanBoard({ projectId }: { projectId: string }) {
             ticket={activeTicket}
             commentCount={countComments(activeTicket.id)}
             dragging
-            className="w-[17rem] rotate-2"
+            className="w-[17rem]"
           />
         )}
       </DragOverlay>
+
+      <div className="mt-8">
+        <Button
+          variant="outline"
+          onClick={() => setShowDone((v) => !v)}
+          className="gap-2"
+          aria-expanded={showDone}
+        >
+          <CheckCircle2 className="size-4" />
+          {showDone ? "Hide" : "Show"} completed ({completed.length})
+          <ChevronDown className={cn("size-4 transition-transform", showDone && "rotate-180")} />
+        </Button>
+        {showDone && (
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {completed.map((t) => (
+              <TicketCard key={t.id} ticket={t} commentCount={countComments(t.id)} />
+            ))}
+            {completed.length === 0 && (
+              <p className="border-2 border-dashed border-foreground/25 p-6 text-sm text-muted-foreground">
+                Nothing completed yet.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </DndContext>
   );
 }

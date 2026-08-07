@@ -181,6 +181,155 @@ cmd_stop() {
   echo ""
 }
 
+cmd_dev() {
+  banner
+  step "Starting TaskForge in FULL DEV mode..."
+  divider
+  echo ""
+  info "Postgres + Redis + auth-service (Java 21)  →  Docker"
+  info "core / search / gateway / frontend           →  native from source (hot-reload)"
+  echo ""
+
+  # ── 1. Start infrastructure + auth-service (Java 21) in Docker ────
+  step "Starting infrastructure + auth-service [Java 21] in Docker..."
+  $DC up -d postgres redis auth-service
+  echo ""
+
+  printf "  ${DIM}Waiting for postgres...${NC}"
+  local elapsed=0
+  while [ $elapsed -lt 30 ]; do
+    if $DC exec -T postgres pg_isready -U taskforge > /dev/null 2>&1; then break; fi
+    sleep 1; elapsed=$((elapsed+1))
+  done
+  printf "\r"; success "postgres              ${GREEN}ready${NC}"
+
+  printf "  ${DIM}Waiting for redis...${NC}"
+  elapsed=0
+  while [ $elapsed -lt 15 ]; do
+    if $DC exec -T redis redis-cli ping > /dev/null 2>&1; then break; fi
+    sleep 1; elapsed=$((elapsed+1))
+  done
+  printf "\r"; success "redis                 ${GREEN}ready${NC}"
+
+  printf "  ${DIM}Waiting for auth-service (Java 21)...${NC}"
+  if wait_for_health "auth-service" "http://localhost:8080/.well-known/jwks.json" 120; then
+    printf "\r"; success "auth-service          ${GREEN}healthy${NC} ${DIM}(Java 21)${NC}"
+  else
+    printf "\r"; warn "auth-service still starting — check docker logs"
+  fi
+
+  divider
+  echo ""
+
+  # ── PID tracking for clean shutdown ────────────────────────────
+  DEV_PIDS=()
+
+  cleanup_dev() {
+    echo ""
+    divider
+    step "Shutting down dev services..."
+    for pid in "${DEV_PIDS[@]}"; do
+      kill "$pid" 2>/dev/null || true
+    done
+    sleep 1
+    for pid in "${DEV_PIDS[@]}"; do
+      kill -9 "$pid" 2>/dev/null || true
+    done
+    success "All dev services stopped."
+    echo ""
+    exit 0
+  }
+  trap cleanup_dev INT TERM
+
+  # ── Shared env (localhost URLs since services run on the host) ──
+  local DB_URL_BASE="postgres://taskforge:taskforge_secret@localhost:5432"
+  local JWKS_LOCAL="http://localhost:8080/.well-known/jwks.json"
+  local LOGS_DIR="$SCRIPT_DIR/.dev-logs"
+  mkdir -p "$LOGS_DIR"
+
+  # ── 3. core-service (Go) ───────────────────────────────────────
+  step "Starting core-service  [Go]..."
+  (
+    cd "$SCRIPT_DIR/core-service"
+    DATABASE_URL="${DB_URL_BASE}/taskforge_core?sslmode=disable" \
+    JWKS_URL="$JWKS_LOCAL" \
+    SEARCH_SERVICE_URL="http://localhost:8000" \
+    GATEWAY_NOTIFY_URL="http://localhost:4000/internal/notify" \
+    PORT="8081" \
+    go run ./cmd/main.go 2>&1
+  ) > "$LOGS_DIR/core-service.log" 2>&1 &
+  DEV_PIDS+=($!)
+  info "core-service  PID=$!  →  logs: .dev-logs/core-service.log"
+  echo ""
+
+  # ── 4. search-service (Python / FastAPI) ───────────────────────
+  step "Starting search-service  [Python / FastAPI --reload]..."
+  (
+    cd "$SCRIPT_DIR/search-service"
+    # Use venv if present, else fallback to system python
+    if [ -d "venv" ]; then
+      source venv/bin/activate 2>/dev/null || true
+    elif [ -d ".venv" ]; then
+      source .venv/bin/activate 2>/dev/null || true
+    else
+      pip install -r requirements.txt -q 2>/dev/null || true
+    fi
+    DATABASE_URL="postgresql://taskforge:taskforge_secret@localhost:5432/taskforge_search" \
+    JWKS_URL="$JWKS_LOCAL" \
+    EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2" \
+    uvicorn main:app --reload --host 0.0.0.0 --port 8000 2>&1
+  ) > "$LOGS_DIR/search-service.log" 2>&1 &
+  DEV_PIDS+=($!)
+  info "search-service PID=$!  →  logs: .dev-logs/search-service.log"
+  echo ""
+
+  # ── 5. gateway (NestJS --watch) ────────────────────────────────
+  step "Starting gateway  [NestJS --watch]..."
+  (
+    cd "$SCRIPT_DIR/gateway"
+    [ ! -d node_modules ] && npm install -q
+    AUTH_SERVICE_URL="http://localhost:8080" \
+    CORE_SERVICE_URL="http://localhost:8081" \
+    SEARCH_SERVICE_URL="http://localhost:8000" \
+    REDIS_URL="redis://localhost:6379" \
+    JWKS_URL="$JWKS_LOCAL" \
+    PORT="4000" \
+    npm run start:dev 2>&1
+  ) > "$LOGS_DIR/gateway.log" 2>&1 &
+  DEV_PIDS+=($!)
+  info "gateway       PID=$!  →  logs: .dev-logs/gateway.log"
+  echo ""
+
+  # ── 6. frontend (Vite HMR) ─────────────────────────────────────
+  step "Starting frontend  [Vite HMR]..."
+  (
+    cd "$SCRIPT_DIR/frontend"
+    [ ! -d node_modules ] && npm install --legacy-peer-deps -q
+    VITE_GRAPHQL_URL="http://localhost:4000/graphql" \
+    npm run dev -- --port 3000 --host 2>&1
+  ) > "$LOGS_DIR/frontend.log" 2>&1 &
+  DEV_PIDS+=($!)
+  info "frontend      PID=$!  →  logs: .dev-logs/frontend.log"
+
+  divider
+  echo ""
+  echo -e "  ${BOLD}🌐 Frontend:${NC}    ${CYAN}http://localhost:3000${NC}  ${DIM}(Vite HMR — instant on save)${NC}"
+  echo -e "  ${BOLD}📊 GraphQL:${NC}     ${CYAN}http://localhost:4000/graphql${NC}  ${DIM}(NestJS --watch)${NC}"
+  echo -e "  ${BOLD}🔑 Auth API:${NC}    ${CYAN}http://localhost:8080${NC}  ${DIM}(Spring Boot)${NC}"
+  echo -e "  ${BOLD}⚙️  Core API:${NC}    ${CYAN}http://localhost:8081${NC}  ${DIM}(Go)${NC}"
+  echo -e "  ${BOLD}🔍 Search API:${NC}  ${CYAN}http://localhost:8000${NC}  ${DIM}(FastAPI --reload)${NC}"
+  echo ""
+  echo -e "  ${BOLD}📋 Logs:${NC}        ${DIM}.dev-logs/<service>.log${NC}"
+  echo -e "  ${DIM}Demo login: alice@example.com / password123${NC}"
+  echo ""
+  echo -e "  ${DIM}Press Ctrl+C to stop all services.${NC}"
+  divider
+  echo ""
+
+  # Keep script alive until Ctrl+C
+  wait
+}
+
 cmd_restart() {
   banner
   step "Restarting TaskForge..."
@@ -477,7 +626,8 @@ cmd_help() {
   echo -e "  ${BOLD}Usage:${NC} ./taskforge.sh ${CYAN}<command>${NC} [options]"
   echo ""
   echo -e "  ${BOLD}Lifecycle:${NC}"
-  echo -e "    ${CYAN}start${NC}    [--build] [--seed] [--attach]   Start all services"
+  echo -e "    ${CYAN}start${NC}    [--build] [--seed] [--attach]   Start all services (fully Dockerized)"
+  echo -e "    ${CYAN}dev${NC}      [--build]                       All services in Docker + Vite HMR (no rebuild)"
   echo -e "    ${CYAN}stop${NC}                                     Stop all services"
   echo -e "    ${CYAN}restart${NC}  [service]                       Restart all or one service"
   echo -e "    ${CYAN}clear${NC}                                    Full reset (containers + volumes + images)"
@@ -495,7 +645,9 @@ cmd_help() {
   echo -e "  ${BOLD}Services:${NC}  auth, core, search, gateway, frontend, postgres, redis"
   echo ""
   echo -e "  ${BOLD}Examples:${NC}"
-  echo -e "    ${DIM}./taskforge.sh start --build --seed     # First-time setup${NC}"
+  echo -e "    ${DIM}./taskforge.sh start --build --seed     # First-time setup (fully Dockerized)${NC}"
+  echo -e "    ${DIM}./taskforge.sh dev                      # Dev mode: HMR frontend + Docker backends${NC}"
+  echo -e "    ${DIM}./taskforge.sh dev --build              # Same, but rebuild backend images first${NC}"
   echo -e "    ${DIM}./taskforge.sh logs -f core             # Follow core-service logs${NC}"
   echo -e "    ${DIM}./taskforge.sh restart auth-service      # Restart auth only${NC}"
   echo -e "    ${DIM}./taskforge.sh db core                   # Open psql to core DB${NC}"
@@ -510,6 +662,7 @@ shift 2>/dev/null || true
 
 case "$COMMAND" in
   start)    cmd_start "$@" ;;
+  dev)      cmd_dev "$@" ;;
   stop)     cmd_stop "$@" ;;
   restart)  cmd_restart "$@" ;;
   clear)    cmd_clear ;;

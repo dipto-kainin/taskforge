@@ -1,14 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { ArrowRight, Lock, Mail, User, ShieldCheck } from "lucide-react";
+import { BlockWorkLogo } from "@/components/tracker/logo";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Login — TaskForge Flightdeck" },
-      { name: "description", content: "Log in or sign up to access your TaskForge projects." },
+      { title: "Login — Blockwork" },
+      { name: "description", content: "Log in or sign up to access your Blockwork projects." },
     ],
   }),
   component: LoginComponent,
@@ -24,9 +25,11 @@ function LoginComponent() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  if (isAuthenticated) {
-    navigate({ to: "/" });
-  }
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate({ to: "/" });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,14 +71,12 @@ function LoginComponent() {
   return (
     <div className="flex min-h-[85vh] items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary border border-primary/20 mb-2">
-            <ShieldCheck className="size-6" />
-          </div>
-          <h1 className="text-2xl font-bold font-display tracking-tight text-foreground">
-            {isRegisterMode ? "Create an account" : "Welcome back to TaskForge"}
+        <div className="flex flex-col items-center text-center space-y-3">
+          <BlockWorkLogo size="lg" />
+          <h1 className="text-2xl font-bold font-display tracking-tight text-foreground uppercase mt-2">
+            {isRegisterMode ? "Create an account" : "Welcome back to Block Work"}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground max-w-xs">
             {isRegisterMode
               ? "Sign up to start managing your projects & Kanban boards."
               : "Enter your credentials to access your workspaces."}
@@ -96,7 +97,7 @@ function LoginComponent() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Alice Smith"
-                    className="w-full rounded-lg border border-input bg-surface pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-lg border border-input bg-background pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     required
                   />
                 </div>
@@ -114,7 +115,7 @@ function LoginComponent() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="alice@example.com"
-                  className="w-full rounded-lg border border-input bg-surface pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border border-input bg-background pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   required
                 />
               </div>
@@ -131,7 +132,7 @@ function LoginComponent() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded-lg border border-input bg-surface pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border border-input bg-background pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   required
                 />
               </div>
@@ -161,7 +162,7 @@ function LoginComponent() {
               <button
                 type="button"
                 onClick={() => handleDemoLogin("alice@example.com")}
-                className="rounded-lg border border-border bg-surface hover:bg-accent px-3 py-2 text-xs font-medium transition-colors text-left"
+                className="rounded-lg border border-border bg-background hover:bg-accent px-3 py-2 text-xs font-medium transition-colors text-left"
               >
                 <div className="font-semibold text-foreground">Alice (Owner)</div>
                 <div className="text-muted-foreground text-[10px]">alice@example.com</div>
@@ -169,7 +170,7 @@ function LoginComponent() {
               <button
                 type="button"
                 onClick={() => handleDemoLogin("bob@example.com")}
-                className="rounded-lg border border-border bg-surface hover:bg-accent px-3 py-2 text-xs font-medium transition-colors text-left"
+                className="rounded-lg border border-border bg-background hover:bg-accent px-3 py-2 text-xs font-medium transition-colors text-left"
               >
                 <div className="font-semibold text-foreground">Bob (Member)</div>
                 <div className="text-muted-foreground text-[10px]">bob@example.com</div>

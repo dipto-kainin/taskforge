@@ -44,25 +44,29 @@ const REGISTER_MUTATION = `
 `;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
     try {
-      const storedToken = localStorage.getItem("accessToken");
-      const storedUser = localStorage.getItem("authUser");
-      if (storedToken && storedUser) {
-        setAccessToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      }
+      return localStorage.getItem("accessToken");
     } catch {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("authUser");
-    } finally {
-      setIsLoading(false);
+      return null;
     }
-  }, []);
+  });
+
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const storedUser = localStorage.getItem("authUser");
+      return storedUser ? (JSON.parse(storedUser) as AuthUser) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return false;
+  });
 
   const login = async (email: string, password: string) => {
     const data = await graphqlRequest<{

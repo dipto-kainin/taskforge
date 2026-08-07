@@ -1,36 +1,75 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, CircleDot, MessageSquare } from "lucide-react";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { CheckCircle2, CircleDot, Eye, Flame } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
+import { StatusChip } from "@/components/tracker/chips";
 import { Assignee } from "@/components/tracker/assignee";
-import { PriorityChip, StatusChip } from "@/components/tracker/chips";
-import { useTracker } from "@/lib/tracker/store";
+import { CURRENT_USER_ID, useTracker } from "@/lib/tracker/store";
 import { STATUSES } from "@/lib/tracker/types";
+import { cn } from "@/lib/utils";
+
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Flightdeck Ticket Tracker" },
+      { title: "Home — Your Work Stats | Blockwork" },
       {
         name: "description",
         content:
-          "See every project at a glance: open work, progress, priority mix and the latest ticket activity.",
+          "Your personal tracker home: issues resolved, work in progress, review queue and activity across every project.",
       },
-      { property: "og:title", content: "Dashboard — Flightdeck Ticket Tracker" },
+      { property: "og:title", content: "Home — Your Work Stats | Blockwork" },
       {
         property: "og:description",
-        content: "See every project at a glance: open work, progress and recent activity.",
+        content: "Issues resolved, in progress and in review across every project you touch.",
       },
     ],
   }),
-  component: Dashboard,
+  component: HomePage,
 });
 
-function Dashboard() {
-  const { projects, tickets, comments } = useTracker();
+function Kpi({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  icon: LucideIcon;
+  tone: string;
+}) {
+  return (
+    <div className={cn("nb p-6", tone)}>
+      <div className="flex items-start justify-between">
+        <p className="label-caps text-foreground/70">{label}</p>
+        <Icon className="size-5" aria-hidden />
+      </div>
+      <p className="mt-6 font-display text-5xl leading-none">{value}</p>
+    </div>
+  );
+}
 
-  const totals = STATUSES.map((s) => ({
+function HomePage() {
+  const { tickets, comments, projects, users } = useTracker();
+  const auth = useAuth();
+  const myId = auth?.user?.id ?? CURRENT_USER_ID;
+  const myName = auth?.user?.name || users.find((u) => u.id === myId)?.name || "Your";
+
+  const mine = tickets.filter((t) => t.assigneeId === myId);
+
+  const resolved = mine.filter((t) => t.status === "done").length;
+  const inProgress = mine.filter((t) => t.status === "in_progress").length;
+  const inReview = mine.filter((t) => t.status === "in_review").length;
+  const urgent = mine.filter((t) => t.priority === "urgent" && t.status !== "done").length;
+
+  const total = mine.length || 1;
+  const completion = Math.round((resolved / total) * 100);
+
+  const byStatus = STATUSES.map((s) => ({
     ...s,
-    count: tickets.filter((t) => t.status === s.id).length,
+    count: mine.filter((t) => t.status === s.id).length,
   }));
 
   const recent = [...tickets]
@@ -38,96 +77,72 @@ function Dashboard() {
     .slice(0, 6);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-8">
-      <header>
-        <p className="label-caps">Overview</p>
-        <h1 className="mt-1 text-3xl font-semibold">Your work, at a glance</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          {tickets.length} tickets across {projects.length} projects. Everything is stored locally in
-          this browser, so feel free to move things around.
+    <div className="mx-auto w-full max-w-6xl space-y-12">
+      <header className="space-y-3">
+        <p className="label-caps">Welcome back</p>
+        <h1 className="font-display text-4xl uppercase leading-tight md:text-5xl">
+          {myName} dashboard
+        </h1>
+        <p className="max-w-2xl text-base text-muted-foreground">
+          {mine.length} issues assigned to you across {projects.length} projects. You have resolved{" "}
+          {resolved} of them.
         </p>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {totals.map((t) => (
-          <div key={t.id} className="rounded-xl border border-border bg-card p-4">
-            <p className="label-caps">{t.label}</p>
-            <p className="mt-2 font-display text-3xl font-semibold">{t.count}</p>
-          </div>
-        ))}
-      </div>
+      <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi label="Resolved" value={resolved} icon={CheckCircle2} tone="bg-done" />
+        <Kpi label="In progress" value={inProgress} icon={CircleDot} tone="bg-progress" />
+        <Kpi label="In review" value={inReview} icon={Eye} tone="bg-accent" />
+        <Kpi label="Urgent open" value={urgent} icon={Flame} tone="bg-urgent" />
+      </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Projects</h2>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {projects.map((project) => {
-            const list = tickets.filter((t) => t.projectId === project.id);
-            const done = list.filter((t) => t.status === "done").length;
-            const pct = list.length ? Math.round((done / list.length) * 100) : 0;
-            return (
-              <Link
-                key={project.id}
-                to="/projects/$projectId/board"
-                params={{ projectId: project.id }}
-                className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-ring/50"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs text-muted-foreground">{project.key}</span>
-                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </div>
-                <h3 className="mt-2 text-base font-semibold">{project.name}</h3>
-                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                  {project.description}
-                </p>
-
-                <div className="mt-4">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>
-                      {done} of {list.length} done
-                    </span>
-                    <span>{pct}%</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {STATUSES.filter((s) => s.id !== "done").map((s) => (
-                    <StatusChip key={s.id} status={s.id} />
-                  ))}
-                </div>
-              </Link>
-            );
-          })}
+      <section className="nb space-y-6 p-8">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="font-display text-xl uppercase">Completion rate</h2>
+          <p className="font-display text-3xl">{completion}%</p>
+        </div>
+        <div className="h-6 w-full border-2 border-foreground bg-secondary">
+          <div className="h-full bg-primary" style={{ width: `${completion}%` }} />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          {byStatus.map((s) => (
+            <div key={s.id} className="border-2 border-foreground p-4">
+              <p className="label-caps">{s.label}</p>
+              <p className="mt-2 font-display text-2xl">{s.count}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Recent activity</h2>
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+      <section className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-xl uppercase">Recent activity</h2>
+          <Link to="/assigned" className="text-sm font-semibold underline underline-offset-4">
+            See everything assigned to me
+          </Link>
+        </div>
+        <ul className="grid gap-4 md:grid-cols-2">
           {recent.map((t) => (
-            <li key={t.id}>
-              <Link
-                to="/projects/$projectId/tickets/$ticketId"
-                params={{ projectId: t.projectId, ticketId: t.id }}
-                className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface"
-              >
-                <CircleDot className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="font-mono text-xs text-muted-foreground">{t.key}</span>
-                <span className="truncate">{t.title}</span>
-                <span className="ml-auto flex shrink-0 items-center gap-2">
-                  {comments.filter((c) => c.ticketId === t.id).length > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MessageSquare className="size-3" />
-                      {comments.filter((c) => c.ticketId === t.id).length}
-                    </span>
-                  )}
-                  <PriorityChip priority={t.priority} />
-                  <StatusChip status={t.status} />
-                  <Assignee id={t.assigneeId} />
+            <li key={t.id} className="nb-sm nb-hover p-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[0.6875rem] font-bold text-muted-foreground">
+                  {t.key}
                 </span>
-              </Link>
+                <StatusChip status={t.status} />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <Link
+                  to="/projects/$projectId/tickets/$ticketId"
+                  params={{ projectId: t.projectId, ticketId: t.id }}
+                  className="text-sm font-semibold hover:underline"
+                >
+                  {t.title}
+                </Link>
+                <Assignee id={t.assigneeId} />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {comments.filter((c) => c.ticketId === t.id).length} comments
+              </p>
             </li>
           ))}
         </ul>

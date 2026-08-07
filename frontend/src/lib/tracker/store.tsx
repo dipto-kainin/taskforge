@@ -10,11 +10,12 @@ import {
 } from "react";
 
 import { createSeedData } from "./seed";
-import type { Priority, Status, Ticket, TrackerData, Comment, Project, User } from "./types";
+import type { Priority, Status, Ticket, TrackerData, Project, User, OrgRole } from "./types";
 import { graphqlRequest } from "../graphql-client";
 import { useAuth } from "../auth-context";
 
-const STORAGE_KEY = "lovable.tracker.v1";
+const STORAGE_KEY = "lovable.tracker.v2";
+
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 interface TrackerContextValue extends TrackerData {
@@ -56,6 +57,18 @@ const GET_PROJECTS_QUERY = `
       key
       name
       description
+    }
+  }
+`;
+
+const GET_ORG_MEMBERS_QUERY = `
+  query GetOrgMembers($orgId: ID!) {
+    orgMembers(orgId: $orgId) {
+      id
+      name
+      email
+      avatarUrl
+      role
     }
   }
 `;
@@ -134,6 +147,7 @@ const CREATE_COMMENT_MUTATION = `
 function normalizeStatus(statusStr: string): Status {
   const s = (statusStr || "").toLowerCase();
   if (s === "in_progress" || s === "in progress" || s === "inprogress") return "in_progress";
+  if (s === "in_review" || s === "in review" || s === "inreview") return "in_review";
   if (s === "done" || s === "completed") return "done";
   if (s === "todo" || s === "to_do" || s === "to do") return "todo";
   return "backlog";
@@ -149,34 +163,32 @@ function normalizePriority(pStr: string): Priority {
 }
 
 export function TrackerProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const auth = useAuth();
+  const isAuthenticated = auth?.isAuthenticated ?? false;
   const [data, setData] = useState<TrackerData>(() => createSeedData());
   const [ready, setReady] = useState(false);
   const hydrated = useRef(false);
 
-  // Load from local storage initially
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) setData(JSON.parse(raw) as TrackerData);
     } catch {
-      /* ignore */
+      /* ignore corrupt storage */
     }
     hydrated.current = true;
     setReady(true);
   }, []);
 
-  // Save to local storage on change
   useEffect(() => {
     if (!hydrated.current) return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
-      /* storage error */
+      /* storage full or unavailable */
     }
   }, [data]);
 
-  // Fetch backend GraphQL data if logged in
   const refetchData = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
@@ -188,13 +200,13 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
       const firstOrg = orgs[0];
       if (!firstOrg) return;
 
-      const firstOrgId = firstOrg.id;
       const projData = await graphqlRequest<{
         projects: { id: string; key: string; name: string; description?: string }[];
-      }>(GET_PROJECTS_QUERY, { orgId: firstOrgId });
+      }>(GET_PROJECTS_QUERY, { orgId: firstOrg.id });
 
       const fetchedProjects: Project[] = (projData.projects || []).map((p) => ({
         id: p.id,
+        orgId: firstOrg.id,
         key: p.key,
         name: p.name,
         description: p.description || "",
@@ -202,6 +214,29 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
       }));
 
       if (fetchedProjects.length === 0) return;
+
+      // Fetch real org members to populate the assignee picker
+      let fetchedUsers: User[] = [];
+      try {
+        const membersRes = await graphqlRequest<{
+          orgMembers: { id: string; name: string; email: string; avatarUrl?: string; role: string }[];
+        }>(GET_ORG_MEMBERS_QUERY, { orgId: firstOrg.id });
+        fetchedUsers = (membersRes.orgMembers || []).map((m) => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          avatarUrl: m.avatarUrl ?? null,
+          initials: m.name
+            .split(" ")
+            .map((w) => w[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2),
+          role: m.role as OrgRole,
+        }));
+      } catch {
+        /* keep seed users if member fetch fails */
+      }
 
       let allTickets: Ticket[] = [];
       for (const proj of fetchedProjects) {
@@ -237,17 +272,16 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
             }
           }
         } catch {
-          /* single project fetch fallback */
+          /* skip unreachable project */
         }
       }
 
-      if (fetchedProjects.length > 0) {
-        setData((prev) => ({
-          ...prev,
-          projects: fetchedProjects.length > 0 ? fetchedProjects : prev.projects,
-          tickets: allTickets.length > 0 ? allTickets : prev.tickets,
-        }));
-      }
+      setData((prev) => ({
+        ...prev,
+        projects: fetchedProjects.length > 0 ? fetchedProjects : prev.projects,
+        tickets: allTickets.length > 0 ? allTickets : prev.tickets,
+        users: fetchedUsers.length > 0 ? fetchedUsers : prev.users,
+      }));
     } catch (e) {
       console.warn("Backend GraphQL unavailable, using cached local data", e);
     }
@@ -260,8 +294,6 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   const createTicket = useCallback<TrackerContextValue["createTicket"]>(
     (input) => {
       let created: Ticket | null = null;
-
-      // Optimistic update
       setData((prev) => {
         const project = prev.projects.find((p) => p.id === input.projectId) || prev.projects[0];
         if (!project) return prev;
@@ -290,7 +322,6 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
         };
       });
 
-      // Call GraphQL mutation asynchronously if authenticated
       if (isAuthenticated && input.projectId) {
         graphqlRequest(CREATE_ISSUE_MUTATION, {
           input: {
@@ -384,18 +415,11 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
 
   const addComment = useCallback<TrackerContextValue["addComment"]>(
     (ticketId, body, authorId) => {
-      const commentId = uid();
       setData((prev) => ({
         ...prev,
         comments: [
           ...prev.comments,
-          {
-            id: commentId,
-            ticketId,
-            authorId,
-            body: body.trim(),
-            createdAt: new Date().toISOString(),
-          },
+          { id: uid(), ticketId, authorId, body: body.trim(), createdAt: new Date().toISOString() },
         ],
       }));
 

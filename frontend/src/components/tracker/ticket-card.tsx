@@ -20,39 +20,41 @@ export function TicketCard({
   return (
     <article
       className={cn(
-        "group rounded-lg border border-border bg-card p-3 transition-shadow",
-        dragging ? "shadow-lg ring-2 ring-ring/40" : "hover:border-ring/40",
+        "nb-sm p-4",
+        dragging ? "rotate-2 shadow-[8px_8px_0_0_var(--color-foreground)]" : "nb-hover",
         className,
       )}
     >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-[0.6875rem] font-bold tracking-wider text-muted-foreground">
+          {ticket.key}
+        </span>
+        <PriorityChip priority={ticket.priority} />
+      </div>
       <Link
         to="/projects/$projectId/tickets/$ticketId"
         params={{ projectId: ticket.projectId, ticketId: ticket.id }}
-        className="block text-sm font-medium leading-snug text-card-foreground hover:text-primary"
+        className="mt-3 block text-sm font-semibold leading-snug hover:underline"
       >
         {ticket.title}
       </Link>
       {ticket.labels.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {ticket.labels.map((l) => (
             <LabelChip key={l} label={l} />
           ))}
         </div>
       )}
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[0.6875rem] text-muted-foreground">{ticket.key}</span>
-          <PriorityChip priority={ticket.priority} />
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="mt-4 flex items-center justify-between gap-2 border-t-2 border-foreground/15 pt-3">
+        <span className="flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground">
           {commentCount > 0 && (
-            <span className="flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
-              <MessageSquare className="size-3" aria-hidden />
+            <>
+              <MessageSquare className="size-3.5" aria-hidden />
               {commentCount}
-            </span>
+            </>
           )}
-          <Assignee id={ticket.assigneeId} />
-        </div>
+        </span>
+        <Assignee id={ticket.assigneeId} />
       </div>
     </article>
   );

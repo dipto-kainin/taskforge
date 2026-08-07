@@ -1,42 +1,36 @@
-import { ArrowDown, ArrowUp, ChevronsDown, ChevronsUp, Equal } from "lucide-react";
-
 import { cn } from "@/lib/utils";
 import type { Priority, Status } from "@/lib/tracker/types";
 import { priorityLabel, statusLabel } from "@/lib/tracker/types";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const priorityStyles: Record<Priority, string> = {
   urgent: "bg-urgent text-urgent-foreground",
   high: "bg-high text-high-foreground",
   medium: "bg-medium text-medium-foreground",
   low: "bg-low text-low-foreground",
-  lowest: "bg-low text-low-foreground",
-};
-
-const priorityIcons: Record<Priority, typeof ArrowUp> = {
-  urgent: ChevronsUp,
-  high: ArrowUp,
-  medium: Equal,
-  low: ArrowDown,
-  lowest: ChevronsDown,
+  lowest: "bg-muted text-foreground",
 };
 
 const statusStyles: Record<Status, string> = {
-  backlog: "bg-muted text-muted-foreground",
-  todo: "bg-low text-low-foreground",
+  backlog: "bg-muted text-foreground",
+  todo: "bg-medium text-medium-foreground",
   in_progress: "bg-progress text-progress-foreground",
+  in_review: "bg-accent text-accent-foreground",
   done: "bg-done text-done-foreground",
 };
 
 const base =
-  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium leading-5";
+  "inline-flex items-center gap-1 border-2 border-foreground rounded-md px-2 py-0.5 text-[0.6875rem] font-bold uppercase tracking-wide leading-5";
 
-export function PriorityChip({ priority, className }: { priority: Priority; className?: string | undefined }) {
-  const Icon = priorityIcons[priority];
+export function PriorityChip({
+  priority,
+  className,
+}: {
+  priority: Priority;
+  className?: string | undefined;
+}) {
   return (
-    <span className={cn(base, priorityStyles[priority], className)}>
-      <Icon className="size-3" aria-hidden />
-      {priorityLabel(priority)}
-    </span>
+    <span className={cn(base, priorityStyles[priority], className)}>{priorityLabel(priority)}</span>
   );
 }
 
@@ -48,7 +42,7 @@ export function LabelChip({ label, className }: { label: string; className?: str
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md border border-border bg-surface px-1.5 py-0.5 text-[0.6875rem] text-surface-foreground",
+        "inline-flex items-center border-2 border-foreground bg-secondary rounded-md px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider text-foreground",
         className,
       )}
     >
@@ -60,22 +54,21 @@ export function LabelChip({ label, className }: { label: string; className?: str
 export function UserAvatar({
   name,
   initials,
+  avatarUrl,
   className,
 }: {
   name: string;
   initials: string;
+  avatarUrl?: string | null | undefined;
   className?: string | undefined;
 }) {
   return (
-    <span
-      title={name}
-      className={cn(
-        "inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-accent text-[0.625rem] font-semibold text-accent-foreground",
-        className,
-      )}
-    >
-      {initials}
-    </span>
+    <Avatar title={name} className={cn("size-7 shrink-0 border-2 border-foreground", className)}>
+      <AvatarImage src={avatarUrl ?? undefined} alt={name} />
+      <AvatarFallback className="bg-accent text-[0.625rem] font-bold text-accent-foreground">
+        {initials}
+      </AvatarFallback>
+    </Avatar>
   );
 }
 
@@ -84,7 +77,7 @@ export function UnassignedAvatar({ className }: { className?: string | undefined
     <span
       title="Unassigned"
       className={cn(
-        "inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-[0.625rem] text-muted-foreground",
+        "inline-flex size-7 shrink-0 items-center justify-center border-2 border-dashed border-foreground/50 text-[0.625rem] font-bold text-muted-foreground",
         className,
       )}
     >
