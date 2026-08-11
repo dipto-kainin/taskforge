@@ -12,10 +12,13 @@ export class PubSubService {
     this.pubSub = new PubSub();
 
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const options = redisUrl.startsWith('rediss://')
+      ? { tls: { rejectUnauthorized: false }, maxRetriesPerRequest: null }
+      : {};
 
     try {
-      this.redisSub = new Redis(redisUrl);
-      this.redisPub = new Redis(redisUrl);
+      this.redisSub = new Redis(redisUrl, options);
+      this.redisPub = new Redis(redisUrl, options);
 
       this.redisSub.subscribe('taskforge:notifications', (err) => {
         if (err) {
