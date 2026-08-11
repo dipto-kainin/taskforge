@@ -280,8 +280,12 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated) refetchData();
-    else setReady(true);
+    if (isAuthenticated) {
+      setReady(false);
+      refetchData();
+    } else {
+      setReady(true);
+    }
   }, [isAuthenticated, refetchData]);
 
   const createTicket = useCallback<TrackerContextValue["createTicket"]>(
