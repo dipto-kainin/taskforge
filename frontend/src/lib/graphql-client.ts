@@ -120,9 +120,13 @@ export async function graphqlRequest<T = any>(
   }
 
   const isJwtError = isAuthError(response.status, result.errors);
+  const isAuthMutation =
+    query.includes("Login") ||
+    query.includes("Register") ||
+    query.includes("RefreshToken");
 
-  // If JWT authorization failed (and this isn't the refresh request itself)
-  if (isJwtError && !query.includes("RefreshToken")) {
+  // If JWT authorization failed (and this isn't login/register/refresh mutation itself)
+  if (isJwtError && !isAuthMutation) {
     const storedRefreshToken =
       typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
 

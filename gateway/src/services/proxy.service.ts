@@ -20,8 +20,13 @@ export class ProxyService {
               ? data.error
               : error.message;
 
-          if (status === 401 || status === 403) {
-            throw new GraphQLError(`JWT failed: ${message}`, {
+          const isAuthEndpoint =
+            error.config?.url?.includes('/api/auth/login') ||
+            error.config?.url?.includes('/api/auth/register');
+
+          if (status === 401 || status === 403 || status === 400) {
+            const prefix = isAuthEndpoint ? '' : 'JWT failed: ';
+            throw new GraphQLError(`${prefix}${message}`, {
               extensions: {
                 code: status === 403 ? 'FORBIDDEN' : 'UNAUTHENTICATED',
                 status,
