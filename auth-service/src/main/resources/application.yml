@@ -12,10 +12,12 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 3       # Supabase free tier session mode limit is 15 total
-      minimum-idle: 1            # Don't hold idle connections open
-      connection-timeout: 30000  # 30s before giving up on a connection
-      idle-timeout: 600000       # Release idle connections after 10 min
+      maximum-pool-size: 3       # Supabase free tier connection limit
+      minimum-idle: 1            # Keep 1 connection idle
+      connection-timeout: 20000  # 20s connection timeout
+      idle-timeout: 300000       # 5 min idle timeout
+      max-lifetime: 1200000      # 20 min max lifetime
+      keepalive-time: 30000      # 30s TCP keepalive to prevent firewall/Supabase drop
 
   # Run schema.sql before Hibernate DDL to ensure 'taskforge_auth' schema exists
   sql:
