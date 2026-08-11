@@ -283,42 +283,66 @@ export class ProxyService {
     return true;
   }
 
-  // ---- Search Service ----
+  // ---- Search Service (optional — gracefully disabled if SEARCH_SERVICE_URL not set) ----
+
+  private get searchEnabled(): boolean {
+    return !!process.env.SEARCH_SERVICE_URL;
+  }
 
   async search(query: string, projectId: string | null, context: any) {
-    const params: any = { q: query };
-    if (projectId) params.project_id = projectId;
-    const { data } = await axios.get(`${this.searchUrl}/api/search`, {
-      params,
-      headers: this.getHeaders(context),
-    });
-    return data;
+    if (!this.searchEnabled) return [];
+    try {
+      const params: any = { q: query };
+      if (projectId) params.project_id = projectId;
+      const { data } = await axios.get(`${this.searchUrl}/api/search`, {
+        params,
+        headers: this.getHeaders(context),
+      });
+      return data;
+    } catch {
+      return [];
+    }
   }
 
   async duplicateCheck(input: any) {
-    const { data } = await axios.post(`${this.searchUrl}/api/ai/duplicate-check`, {
-      title: input.title,
-      description: input.description || '',
-      project_id: input.projectId,
-      threshold: input.threshold || 0.7,
-    });
-    return data;
+    if (!this.searchEnabled) return { is_duplicate: false, matches: [] };
+    try {
+      const { data } = await axios.post(`${this.searchUrl}/api/ai/duplicate-check`, {
+        title: input.title,
+        description: input.description || '',
+        project_id: input.projectId,
+        threshold: input.threshold || 0.7,
+      });
+      return data;
+    } catch {
+      return { is_duplicate: false, matches: [] };
+    }
   }
 
   async suggestLabels(input: any) {
-    const { data } = await axios.post(`${this.searchUrl}/api/ai/suggest-labels`, {
-      title: input.title,
-      description: input.description || '',
-      project_id: input.projectId,
-    });
-    return data;
+    if (!this.searchEnabled) return { suggestions: [] };
+    try {
+      const { data } = await axios.post(`${this.searchUrl}/api/ai/suggest-labels`, {
+        title: input.title,
+        description: input.description || '',
+        project_id: input.projectId,
+      });
+      return data;
+    } catch {
+      return { suggestions: [] };
+    }
   }
 
   async summarizeComments(issueId: string, comments: any[]) {
-    const { data } = await axios.post(`${this.searchUrl}/api/ai/summarize-comments`, {
-      issue_id: issueId,
-      comments,
-    });
-    return data;
+    if (!this.searchEnabled) return { summary: 'Search service unavailable.', comment_count: comments.length };
+    try {
+      const { data } = await axios.post(`${this.searchUrl}/api/ai/summarize-comments`, {
+        issue_id: issueId,
+        comments,
+      });
+      return data;
+    } catch {
+      return { summary: 'Search service unavailable.', comment_count: comments.length };
+    }
   }
 }
