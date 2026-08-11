@@ -1,11 +1,39 @@
 import { Injectable } from '@nestjs/common';
-import axios, { AxiosRequestConfig } from 'axios';
+import axios from 'axios';
+import { GraphQLError } from 'graphql';
 
 @Injectable()
 export class ProxyService {
   private authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:8080';
   private coreUrl = process.env.CORE_SERVICE_URL || 'http://localhost:8081';
   private searchUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:8000';
+
+  constructor() {
+    axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (axios.isAxiosError(error) && error.response) {
+          const status = error.response.status;
+          const data = error.response.data;
+          const message =
+            typeof data === 'object' && data?.error
+              ? data.error
+              : error.message;
+
+          if (status === 401 || status === 403) {
+            throw new GraphQLError(`JWT failed: ${message}`, {
+              extensions: {
+                code: status === 403 ? 'FORBIDDEN' : 'UNAUTHENTICATED',
+                status,
+                originalError: data,
+              },
+            });
+          }
+        }
+        return Promise.reject(error);
+      },
+    );
+  }
 
   private getHeaders(context: any): Record<string, string> {
     const headers: Record<string, string> = {
@@ -131,6 +159,27 @@ export class ProxyService {
       name: input.name,
       description: input.description || '',
     }, { headers: this.getHeaders(context) });
+    return data;
+  }
+
+  async generateProjectJoinCode(projectId: string, durationMinutes: number, context: any) {
+    const { data } = await axios.post(
+      `${this.coreUrl}/api/projects/${projectId}/join-codes`,
+      { duration_minutes: durationMinutes },
+      { headers: this.getHeaders(context) },
+    );
+    return {
+      code: data.code,
+      expiresAt: data.expires_at,
+    };
+  }
+
+  async joinProjectWithCode(code: string, context: any) {
+    const { data } = await axios.post(
+      `${this.coreUrl}/api/projects/join`,
+      { code },
+      { headers: this.getHeaders(context) },
+    );
     return data;
   }
 

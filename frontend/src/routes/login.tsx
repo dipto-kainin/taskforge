@@ -55,18 +55,6 @@ function LoginComponent() {
     }
   };
 
-  const handleDemoLogin = async (demoEmail: string) => {
-    setLoading(true);
-    try {
-      await login(demoEmail, "password123");
-      toast.success(`Logged in as ${demoEmail}`);
-      navigate({ to: "/" });
-    } catch (err: any) {
-      toast.error(err.message || "Demo login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="flex min-h-[85vh] items-center justify-center px-4 py-8">
@@ -154,30 +142,8 @@ function LoginComponent() {
             </button>
           </form>
 
-          <div className="mt-6 border-t border-border pt-4">
-            <p className="text-xs font-medium text-muted-foreground mb-3 text-center">
-              Quick Login as Demo Users:
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin("alice@example.com")}
-                className="rounded-lg border border-border bg-background hover:bg-accent px-3 py-2 text-xs font-medium transition-colors text-left"
-              >
-                <div className="font-semibold text-foreground">Alice (Owner)</div>
-                <div className="text-muted-foreground text-[10px]">alice@example.com</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDemoLogin("bob@example.com")}
-                className="rounded-lg border border-border bg-background hover:bg-accent px-3 py-2 text-xs font-medium transition-colors text-left"
-              >
-                <div className="font-semibold text-foreground">Bob (Member)</div>
-                <div className="text-muted-foreground text-[10px]">bob@example.com</div>
-              </button>
-            </div>
-          </div>
         </div>
+
 
         <div className="text-center text-xs text-muted-foreground">
           {isRegisterMode ? "Already have an account?" : "Don't have an account yet?"}{" "}

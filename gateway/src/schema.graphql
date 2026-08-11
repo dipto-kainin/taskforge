@@ -24,6 +24,8 @@ type Mutation {
   createTeam(orgId: ID!, name: String!): Team!
 
   createProject(input: CreateProjectInput!): Project!
+  joinProjectWithCode(code: String!): Project!
+  generateProjectJoinCode(projectId: ID!, durationMinutes: Int!): ProjectJoinCode!
   createSprint(projectId: ID!, input: CreateSprintInput!): Sprint!
   updateSprint(id: ID!, status: String!): Sprint!
 
@@ -268,4 +270,9 @@ type LabelSuggestion {
 type SummaryResult {
   summary: String!
   commentCount: Int!
+}
+
+type ProjectJoinCode {
+  code: String!
+  expiresAt: String!
 }

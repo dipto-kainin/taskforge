@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Columns3, Home, ListFilter, ListTodo, RotateCcw, UserCheck, Users } from "lucide-react";
-import { toast } from "sonner";
+import { Columns3, Home, ListFilter, ListTodo, Plus, UserCheck, Users } from "lucide-react";
+import { CreateOrJoinProjectDialog } from "@/components/tracker/create-or-join-project-dialog";
+
 
 import {
   Sidebar,
@@ -18,16 +19,16 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { CURRENT_USER_ID, useTracker } from "@/lib/tracker/store";
+import { useTracker } from "@/lib/tracker/store";
 
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { BlockWorkLogo } from "@/components/tracker/logo";
 
 export function AppSidebar() {
-  const { projects, tickets, resetDemoData } = useTracker();
+  const { projects, tickets } = useTracker();
   const auth = useAuth();
-  const myId = auth?.user?.id ?? CURRENT_USER_ID;
+  const myId = auth?.user?.id ?? "";
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (r) => r.location.pathname });
@@ -82,9 +83,24 @@ export function AppSidebar() {
         <div className="w-full border-t border-border/60" />
 
         <SidebarGroup className="pt-1 pb-1.5">
-          <SidebarGroupLabel className="h-6 pt-0 font-display font-bold text-xs uppercase tracking-wider text-foreground">
-            Projects
-          </SidebarGroupLabel>
+          <div className="flex items-center justify-between px-2 mb-2">
+            <SidebarGroupLabel className="h-6 pt-0 font-display font-bold text-xs uppercase tracking-wider text-foreground px-0">
+              Projects
+            </SidebarGroupLabel>
+            {!collapsed && (
+              <CreateOrJoinProjectDialog
+                trigger={
+                  <button
+                    type="button"
+                    title="Create or Join Project"
+                    className="inline-flex size-5 items-center justify-center rounded border border-foreground bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
+                }
+              />
+            )}
+          </div>
           <SidebarGroupContent>
             <SidebarMenu>
               {projects.map((project) => {
@@ -107,13 +123,13 @@ export function AppSidebar() {
                           </span>
                         ) : (
                           <>
-                            <span className="flex items-center gap-2 truncate">
-                              <span className="font-mono text-[0.625rem] font-bold text-muted-foreground">
+                            <span className="flex items-center gap-2 truncate min-w-0">
+                              <span className="inline-flex items-center justify-center rounded-sm bg-muted/90 px-1.5 h-4.5 font-mono text-[0.625rem] font-bold uppercase text-muted-foreground border border-border/60 shrink-0 leading-none pt-[2px]">
                                 {project.key}
                               </span>
-                              <span className="truncate">{project.name}</span>
+                              <span className="truncate text-sm font-medium text-foreground">{project.name}</span>
                             </span>
-                            <span className="text-[0.625rem] font-bold text-muted-foreground">
+                            <span className="text-[0.625rem] font-bold text-muted-foreground shrink-0 leading-none">
                               {count}
                             </span>
                           </>
@@ -173,22 +189,6 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Reset demo data"
-              onClick={() => {
-                resetDemoData();
-                toast.success("Demo data restored");
-              }}
-            >
-              <RotateCcw className="size-4" />
-              <span>Reset demo data</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   );
 }

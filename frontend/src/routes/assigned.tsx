@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Assignee } from "@/components/tracker/assignee";
 import { LabelChip, PriorityChip, StatusChip } from "@/components/tracker/chips";
 import { Button } from "@/components/ui/button";
-import { CURRENT_USER_ID, useTracker } from "@/lib/tracker/store";
+import { useTracker } from "@/lib/tracker/store";
 import { STATUSES } from "@/lib/tracker/types";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +31,7 @@ export const Route = createFileRoute("/assigned")({
 function AssignedPage() {
   const { tickets, projects } = useTracker();
   const auth = useAuth();
-  const myId = auth?.user?.id ?? CURRENT_USER_ID;
+  const myId = auth?.user?.id ?? "";
   const [status, setStatus] = useState<string>("open");
 
   const mine = tickets

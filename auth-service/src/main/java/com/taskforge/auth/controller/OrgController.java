@@ -39,6 +39,9 @@ public class OrgController {
 
     @GetMapping
     public ResponseEntity<?> listOrgs(@AuthenticationPrincipal JwtAuthFilter.UserPrincipal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
         List<Organization> orgs = orgService.getOrgsForUser(principal.getId());
         List<Map<String, Object>> result = orgs.stream().map(o -> {
             Map<String, Object> m = new HashMap<>();
@@ -54,6 +57,9 @@ public class OrgController {
     @PostMapping
     public ResponseEntity<?> createOrg(@Valid @RequestBody CreateOrgRequest req,
                                        @AuthenticationPrincipal JwtAuthFilter.UserPrincipal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+        }
         try {
             Organization org = orgService.createOrg(req.name(), req.slug(), principal.getId());
             return ResponseEntity.ok(Map.of(

@@ -26,7 +26,11 @@ embedding_model = EmbeddingModel()
 async def lifespan(app: FastAPI):
     """Startup: connect to DB, load embedding model."""
     await db.connect()
-    await db.create_tables()
+    if os.getenv("AUTO_MIGRATE", "true").lower() != "false":
+        await db.create_tables()
+        logger.info("Migrations applied (search schema)")
+    else:
+        logger.info("Skipping migrations (AUTO_MIGRATE=false)")
     embedding_model.load()
     logger.info("Search service ready")
     yield

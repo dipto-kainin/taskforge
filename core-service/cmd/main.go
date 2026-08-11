@@ -15,7 +15,7 @@ func main() {
 	// Connect to database
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://taskforge:taskforge_secret@localhost:5432/taskforge_core?sslmode=disable"
+		log.Fatal("DATABASE_URL environment variable is required but not set")
 	}
 
 	database, err := db.Connect(dbURL)
@@ -24,8 +24,21 @@ func main() {
 	}
 	defer database.Close()
 
-	if err := db.Migrate(database); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+	if os.Getenv("RUN_MIGRATE_ONLY") == "true" {
+		log.Println("Running core-service migrations on database...")
+		if err := db.Migrate(database); err != nil {
+			log.Fatalf("Failed to run migrations: %v", err)
+		}
+		log.Println("Core migrations applied successfully!")
+		return
+	}
+
+	if os.Getenv("AUTO_MIGRATE") != "false" {
+		if err := db.Migrate(database); err != nil {
+			log.Fatalf("Failed to run migrations: %v", err)
+		}
+	} else {
+		log.Println("Skipping migrations (AUTO_MIGRATE=false)")
 	}
 
 	// Get service URLs
@@ -64,6 +77,8 @@ func main() {
 
 	// Project routes
 	api.POST("/projects", authMW, h.CreateProject)
+	api.POST("/projects/join", authMW, h.JoinProject)
+	api.POST("/projects/:id/join-codes", authMW, h.GenerateJoinCode)
 	api.GET("/orgs/:orgId/projects", authMW, h.ListProjects)
 	api.GET("/projects/:id", authMW, h.GetProject)
 

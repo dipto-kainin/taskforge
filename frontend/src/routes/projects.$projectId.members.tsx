@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Crown, Shield, User as UserIcon, UserMinus, UserPlus } from "lucide-react";
+import { Crown, Shield, User as UserIcon, UserMinus, UserPlus, KeyRound, Copy, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -57,6 +57,14 @@ export const Route = createFileRoute("/projects/$projectId/members")({
 });
 
 // ── GraphQL mutations ────────────────────────────────────────────
+const GENERATE_JOIN_CODE_MUTATION = `
+  mutation GenerateProjectJoinCode($projectId: ID!, $durationMinutes: Int!) {
+    generateProjectJoinCode(projectId: $projectId, durationMinutes: $durationMinutes) {
+      code
+      expiresAt
+    }
+  }
+`;
 const INVITE_MUTATION = `
   mutation InviteToOrg($orgId: ID!, $email: String!, $role: String) {
     inviteToOrg(orgId: $orgId, email: $email, role: $role) {
@@ -308,6 +316,87 @@ function MemberCard({
   );
 }
 
+function GenerateJoinCodeCard({ projectId }: { projectId: string }) {
+  const [duration, setDuration] = useState("60");
+  const [loading, setLoading] = useState(false);
+  const [activeCode, setActiveCode] = useState<{ code: string; expiresAt: string } | null>(null);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    try {
+      const res = await graphqlRequest<{
+        generateProjectJoinCode: { code: string; expiresAt: string };
+      }>(GENERATE_JOIN_CODE_MUTATION, {
+        projectId,
+        durationMinutes: parseInt(duration, 10),
+      });
+
+      setActiveCode(res.generateProjectJoinCode);
+      toast.success(`Join passcode generated: ${res.generateProjectJoinCode.code}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate join passcode.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyCode = () => {
+    if (activeCode) {
+      navigator.clipboard.writeText(activeCode.code);
+      toast.success("Passcode copied to clipboard!");
+    }
+  };
+
+  return (
+    <div className="nb space-y-4 p-5 bg-card">
+      <div>
+        <h3 className="font-display text-base uppercase flex items-center gap-2">
+          <KeyRound className="size-4 text-primary" />
+          Temporary Join Passcode (TOTP)
+        </h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Generate a time-limited passcode allowing anyone to join this project & workspace.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Select value={duration} onValueChange={setDuration}>
+          <SelectTrigger className="w-40 h-9 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="5">5 Minutes</SelectItem>
+            <SelectItem value="60">1 Hour</SelectItem>
+            <SelectItem value="360">6 Hours</SelectItem>
+            <SelectItem value="1440">24 Hours</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button onClick={handleGenerate} disabled={loading} size="sm" className="nb-sm font-semibold gap-1.5">
+          <Sparkles className="size-3.5" />
+          {loading ? "Generating…" : "Generate Passcode"}
+        </Button>
+      </div>
+
+      {activeCode && (
+        <div className="nb-flat flex items-center justify-between gap-4 p-3 bg-secondary">
+          <div>
+            <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Active Join Passcode</p>
+            <p className="font-mono text-2xl font-black tracking-widest text-primary">{activeCode.code}</p>
+            <p className="text-[0.7rem] text-muted-foreground mt-0.5">
+              Expires at: {new Date(activeCode.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          </div>
+          <Button onClick={copyCode} variant="outline" size="sm" className="nb-sm gap-1 text-xs">
+            <Copy className="size-3.5" />
+            Copy Code
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────
 function MembersPage() {
   const { projectId } = Route.useParams() as { projectId: string };
@@ -333,7 +422,7 @@ function MembersPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-10">
+    <div className="mx-auto w-full max-w-3xl space-y-8">
       {/* Header */}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -348,6 +437,9 @@ function MembersPage() {
           <InviteDialog orgId={orgId} onSuccess={refetchData} />
         )}
       </header>
+
+      {/* TOTP / Passcode Generator Card for Admins/Members */}
+      {canInvite && <GenerateJoinCodeCard projectId={projectId} />}
 
       {/* Role legend */}
       <div className="nb-flat flex flex-wrap gap-6 p-4">

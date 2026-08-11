@@ -68,6 +68,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   });
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleTokensRefreshed = (e: Event) => {
+      const customEvent = e as CustomEvent<{ accessToken: string; refreshToken: string }>;
+      if (customEvent.detail?.accessToken) {
+        setAccessToken(customEvent.detail.accessToken);
+      }
+    };
+
+    const handleLogout = () => {
+      setAccessToken(null);
+      setUser(null);
+    };
+
+    window.addEventListener("auth:tokens_refreshed", handleTokensRefreshed);
+    window.addEventListener("auth:logout", handleLogout);
+
+    return () => {
+      window.removeEventListener("auth:tokens_refreshed", handleTokensRefreshed);
+      window.removeEventListener("auth:logout", handleLogout);
+    };
+  }, []);
+
   const login = async (email: string, password: string) => {
     const data = await graphqlRequest<{
       login: {

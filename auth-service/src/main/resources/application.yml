@@ -1,19 +1,30 @@
+logging:
+  level:
+    org.springframework.security: TRACE
+
 spring:
   application:
     name: auth-service
+
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/taskforge_auth}
-    username: ${SPRING_DATASOURCE_USERNAME:taskforge}
-    password: ${SPRING_DATASOURCE_PASSWORD:taskforge_secret}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres?currentSchema=taskforge_auth&sslmode=disable}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
+
+  # Run schema.sql before Hibernate DDL to ensure 'taskforge_auth' schema exists
+  sql:
+    init:
+      mode: always
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        default_schema: taskforge_auth
 
 server:
   port: 8080

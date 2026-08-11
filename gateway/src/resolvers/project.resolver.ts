@@ -64,6 +64,27 @@ export class ProjectResolver {
   }
 
   @Mutation()
+  async generateProjectJoinCode(
+    @Args('projectId') projectId: string,
+    @Args('durationMinutes') durationMinutes: number,
+    @Context() context: any,
+  ) {
+    return this.proxy.generateProjectJoinCode(projectId, durationMinutes, context);
+  }
+
+  @Mutation()
+  async joinProjectWithCode(@Args('code') code: string, @Context() context: any) {
+    const p = await this.proxy.joinProjectWithCode(code, context);
+    return {
+      id: p.id,
+      orgId: p.org_id,
+      key: p.key,
+      name: p.name,
+      description: p.description,
+    };
+  }
+
+  @Mutation()
   async createSprint(
     @Args('projectId') projectId: string,
     @Args('input') input: any,

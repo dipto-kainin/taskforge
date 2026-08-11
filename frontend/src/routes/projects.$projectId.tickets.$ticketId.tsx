@@ -17,7 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { CURRENT_USER_ID, useProject, useTracker } from "@/lib/tracker/store";
+import { useProject, useTracker } from "@/lib/tracker/store";
+import { useAuth } from "@/lib/auth-context";
 import { PRIORITIES, STATUSES, type Priority, type Status } from "@/lib/tracker/types";
 
 export const Route = createFileRoute("/projects/$projectId/tickets/$ticketId")({
@@ -43,6 +44,7 @@ function TicketPage() {
   const navigate = useNavigate();
   const project = useProject(projectId);
   const { tickets, comments, users, updateTicket, deleteTicket, addComment } = useTracker();
+  const auth = useAuth();
   const ticket = tickets.find((t) => t.id === ticketId) ?? null;
 
   const [draft, setDraft] = useState("");
@@ -67,7 +69,7 @@ function TicketPage() {
 
   const postComment = () => {
     if (!draft.trim()) return;
-    addComment(ticket.id, draft, CURRENT_USER_ID);
+    addComment(ticket.id, draft, auth?.user?.id ?? "");
     setDraft("");
   };
 

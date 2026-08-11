@@ -4,19 +4,17 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { createSeedData } from "./seed";
 import type { Priority, Status, Ticket, TrackerData, Project, User, OrgRole } from "./types";
 import { graphqlRequest } from "../graphql-client";
 import { useAuth } from "../auth-context";
 
-const STORAGE_KEY = "lovable.tracker.v2";
-
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+const EMPTY_DATA: TrackerData = { projects: [], tickets: [], comments: [], users: [] };
 
 interface TrackerContextValue extends TrackerData {
   ready: boolean;
@@ -33,7 +31,6 @@ interface TrackerContextValue extends TrackerData {
   moveTicket: (id: string, status: Status, index: number) => void;
   deleteTicket: (id: string) => void;
   addComment: (ticketId: string, body: string, authorId: string) => void;
-  resetDemoData: () => void;
   refetchData: () => Promise<void>;
 }
 
@@ -165,29 +162,8 @@ function normalizePriority(pStr: string): Priority {
 export function TrackerProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const isAuthenticated = auth?.isAuthenticated ?? false;
-  const [data, setData] = useState<TrackerData>(() => createSeedData());
+  const [data, setData] = useState<TrackerData>(EMPTY_DATA);
   const [ready, setReady] = useState(false);
-  const hydrated = useRef(false);
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setData(JSON.parse(raw) as TrackerData);
-    } catch {
-      /* ignore corrupt storage */
-    }
-    hydrated.current = true;
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated.current) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {
-      /* storage full or unavailable */
-    }
-  }, [data]);
 
   const refetchData = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -198,7 +174,10 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
 
       const orgs = orgData.organizations || [];
       const firstOrg = orgs[0];
-      if (!firstOrg) return;
+      if (!firstOrg) {
+        setData(EMPTY_DATA);
+        return;
+      }
 
       const projData = await graphqlRequest<{
         projects: { id: string; key: string; name: string; description?: string }[];
@@ -212,8 +191,6 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
         description: p.description || "",
         counter: 10,
       }));
-
-      if (fetchedProjects.length === 0) return;
 
       // Fetch real org members to populate the assignee picker
       let fetchedUsers: User[] = [];
@@ -235,7 +212,17 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
           role: m.role as OrgRole,
         }));
       } catch {
-        /* keep seed users if member fetch fails */
+        /* member fetch failed — users remain empty */
+      }
+
+      if (fetchedProjects.length === 0) {
+        setData({
+          projects: [],
+          tickets: [],
+          users: fetchedUsers,
+          comments: [],
+        });
+        return;
       }
 
       let allTickets: Ticket[] = [];
@@ -276,20 +263,26 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      setData((prev) => ({
-        ...prev,
-        projects: fetchedProjects.length > 0 ? fetchedProjects : prev.projects,
-        tickets: allTickets.length > 0 ? allTickets : prev.tickets,
-        users: fetchedUsers.length > 0 ? fetchedUsers : prev.users,
-      }));
-    } catch (e) {
-      console.warn("Backend GraphQL unavailable, using cached local data", e);
+      setData({
+        projects: fetchedProjects,
+        tickets: allTickets,
+        users: fetchedUsers,
+        comments: [],
+      });
+    } catch (e: any) {
+      console.error("Failed to fetch data from backend", e);
+      if (e?.message?.includes("401") || e?.message?.includes("Unauthorized") || e?.message?.includes("403")) {
+        auth?.logout();
+      }
+    } finally {
+      setReady(true);
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
-    refetchData();
-  }, [refetchData]);
+    if (isAuthenticated) refetchData();
+    else setReady(true);
+  }, [isAuthenticated, refetchData]);
 
   const createTicket = useCallback<TrackerContextValue["createTicket"]>(
     (input) => {
@@ -433,8 +426,6 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
     [isAuthenticated]
   );
 
-  const resetDemoData = useCallback(() => setData(createSeedData()), []);
-
   const value = useMemo<TrackerContextValue>(
     () => ({
       ...data,
@@ -444,7 +435,6 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
       moveTicket,
       deleteTicket,
       addComment,
-      resetDemoData,
       refetchData,
     }),
     [
@@ -455,7 +445,6 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
       moveTicket,
       deleteTicket,
       addComment,
-      resetDemoData,
       refetchData,
     ]
   );
@@ -473,5 +462,3 @@ export function useProject(projectId: string) {
   const { projects } = useTracker();
   return projects.find((p) => p.id === projectId) ?? null;
 }
-
-export const CURRENT_USER_ID = "u1";

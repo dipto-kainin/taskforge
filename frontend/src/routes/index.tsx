@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { StatusChip } from "@/components/tracker/chips";
 import { Assignee } from "@/components/tracker/assignee";
-import { CURRENT_USER_ID, useTracker } from "@/lib/tracker/store";
+import { useTracker } from "@/lib/tracker/store";
 import { STATUSES } from "@/lib/tracker/types";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +54,7 @@ function Kpi({
 function HomePage() {
   const { tickets, comments, projects, users } = useTracker();
   const auth = useAuth();
-  const myId = auth?.user?.id ?? CURRENT_USER_ID;
+  const myId = auth?.user?.id ?? "";
   const myName = auth?.user?.name || users.find((u) => u.id === myId)?.name || "Your";
 
   const mine = tickets.filter((t) => t.assigneeId === myId);

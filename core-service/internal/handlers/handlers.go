@@ -54,13 +54,24 @@ func (h *Handler) CreateProject(c *kai.Context) {
 		return
 	}
 
+	// Check unique project name in organization
+	var existingCount int
+	err = h.db.QueryRow(`SELECT COUNT(*) FROM core.projects WHERE org_id = $1 AND LOWER(name) = LOWER($2)`, orgID, name).Scan(&existingCount)
+	if err != nil {
+		log.Printf("[CreateProject] Check unique name error: %v", err)
+	} else if existingCount > 0 {
+		c.JSON(400, map[string]string{"error": "Project with this name already exists in organization"})
+		return
+	}
+
 	projectID := uuid.New().String()
 
 	_, err = h.db.Exec(
-		`INSERT INTO projects (id, org_id, key, name, description) VALUES ($1, $2, $3, $4, $5)`,
+		`INSERT INTO core.projects (id, org_id, key, name, description) VALUES ($1, $2, $3, $4, $5)`,
 		projectID, orgID, key, name, description,
 	)
 	if err != nil {
+		log.Printf("[CreateProject] INSERT INTO projects error: %v", err)
 		c.JSON(500, map[string]string{"error": "failed to create project: " + err.Error()})
 		return
 	}
@@ -68,11 +79,12 @@ func (h *Handler) CreateProject(c *kai.Context) {
 	// Create default board
 	boardID := uuid.New().String()
 	_, err = h.db.Exec(
-		`INSERT INTO boards (id, project_id, name) VALUES ($1, $2, $3)`,
+		`INSERT INTO core.boards (id, project_id, name) VALUES ($1, $2, $3)`,
 		boardID, projectID, "Main Board",
 	)
 	if err != nil {
-		c.JSON(500, map[string]string{"error": "failed to create board"})
+		log.Printf("[CreateProject] INSERT INTO boards error: %v", err)
+		c.JSON(500, map[string]string{"error": "failed to create board: " + err.Error()})
 		return
 	}
 
@@ -83,7 +95,7 @@ func (h *Handler) CreateProject(c *kai.Context) {
 	for _, col := range columns {
 		colID := uuid.New().String()
 		h.db.Exec(
-			`INSERT INTO columns_ (id, board_id, name, position) VALUES ($1, $2, $3, $4)`,
+			`INSERT INTO core.columns_ (id, board_id, name, position) VALUES ($1, $2, $3, $4)`,
 			colID, boardID, col.name, col.pos,
 		)
 	}
@@ -101,11 +113,11 @@ func (h *Handler) ListProjects(c *kai.Context) {
 	orgID := c.Param("orgId")
 
 	rows, err := h.db.Query(
-		`SELECT id, org_id, key, name, description, created_at FROM projects WHERE org_id = $1 ORDER BY created_at DESC`,
+		`SELECT id, org_id, key, name, description, created_at FROM core.projects WHERE org_id = $1 ORDER BY created_at DESC`,
 		orgID,
 	)
 	if err != nil {
-		c.JSON(500, map[string]string{"error": "failed to query projects"})
+		c.JSON(500, map[string]string{"error": "failed to query projects: " + err.Error()})
 		return
 	}
 	defer rows.Close()
@@ -130,7 +142,7 @@ func (h *Handler) GetProject(c *kai.Context) {
 	var projectID, orgID, key, name, desc string
 	var createdAt time.Time
 	err := h.db.QueryRow(
-		`SELECT id, org_id, key, name, description, created_at FROM projects WHERE id = $1`, id,
+		`SELECT id, org_id, key, name, description, created_at FROM core.projects WHERE id = $1`, id,
 	).Scan(&projectID, &orgID, &key, &name, &desc, &createdAt)
 
 	if err == sql.ErrNoRows {
@@ -156,7 +168,7 @@ func (h *Handler) GetBoard(c *kai.Context) {
 	// Get board
 	var boardID, boardName string
 	err := h.db.QueryRow(
-		`SELECT id, name FROM boards WHERE project_id = $1 LIMIT 1`, projectID,
+		`SELECT id, name FROM core.boards WHERE project_id = $1 LIMIT 1`, projectID,
 	).Scan(&boardID, &boardName)
 
 	if err == sql.ErrNoRows {
@@ -170,7 +182,7 @@ func (h *Handler) GetBoard(c *kai.Context) {
 
 	// Get columns
 	colRows, err := h.db.Query(
-		`SELECT id, name, position FROM columns_ WHERE board_id = $1 ORDER BY position`, boardID,
+		`SELECT id, name, position FROM core.columns_ WHERE board_id = $1 ORDER BY position`, boardID,
 	)
 	if err != nil {
 		c.JSON(500, map[string]string{"error": "failed to query columns"})
@@ -187,7 +199,7 @@ func (h *Handler) GetBoard(c *kai.Context) {
 		// Get issues for this column
 		issueRows, err := h.db.Query(
 			`SELECT id, key, title, description, type, status, priority, assignee_id, reporter_id, sprint_id, story_points, parent_issue_id, created_at, updated_at
-			 FROM issues WHERE column_id = $1 ORDER BY created_at`, colID,
+			 FROM core.issues WHERE column_id = $1 ORDER BY created_at`, colID,
 		)
 		if err != nil {
 			continue
@@ -223,7 +235,7 @@ func (h *Handler) GetBoard(c *kai.Context) {
 
 			// Get labels for this issue
 			labelRows, _ := h.db.Query(
-				`SELECT l.id, l.name, l.color FROM labels l JOIN issue_labels il ON l.id = il.label_id WHERE il.issue_id = $1`, issueID,
+				`SELECT l.id, l.name, l.color FROM core.labels l JOIN core.issue_labels il ON l.id = il.label_id WHERE il.issue_id = $1`, issueID,
 			)
 			labels := []map[string]string{}
 			if labelRows != nil {
@@ -268,7 +280,7 @@ func (h *Handler) CreateSprint(c *kai.Context) {
 
 	sprintID := uuid.New().String()
 	_, err = h.db.Exec(
-		`INSERT INTO sprints (id, project_id, name, start_date, end_date) VALUES ($1, $2, $3, $4, $5)`,
+		`INSERT INTO core.sprints (id, project_id, name, start_date, end_date) VALUES ($1, $2, $3, $4, $5)`,
 		sprintID, projectID, name, startDate, endDate,
 	)
 	if err != nil {
@@ -291,7 +303,7 @@ func (h *Handler) UpdateSprint(c *kai.Context) {
 	}
 
 	if status, ok := data["status"].(string); ok {
-		_, err = h.db.Exec(`UPDATE sprints SET status = $1 WHERE id = $2`, status, sprintID)
+		_, err = h.db.Exec(`UPDATE core.sprints SET status = $1 WHERE id = $2`, status, sprintID)
 		if err != nil {
 			c.JSON(500, map[string]string{"error": "failed to update sprint"})
 			return
@@ -330,7 +342,7 @@ func (h *Handler) CreateIssue(c *kai.Context) {
 
 	// Get project key for issue key generation
 	var projectKey string
-	err = h.db.QueryRow(`SELECT key FROM projects WHERE id = $1`, projectID).Scan(&projectKey)
+	err = h.db.QueryRow(`SELECT key FROM core.projects WHERE id = $1`, projectID).Scan(&projectKey)
 	if err != nil {
 		c.JSON(404, map[string]string{"error": "project not found"})
 		return
@@ -338,7 +350,7 @@ func (h *Handler) CreateIssue(c *kai.Context) {
 
 	// Generate issue key
 	var seqVal int
-	err = h.db.QueryRow(`SELECT nextval('issue_key_seq')`).Scan(&seqVal)
+	err = h.db.QueryRow(`SELECT nextval('core.issue_key_seq')`).Scan(&seqVal)
 	if err != nil {
 		c.JSON(500, map[string]string{"error": "failed to generate issue key"})
 		return
@@ -348,7 +360,7 @@ func (h *Handler) CreateIssue(c *kai.Context) {
 	// Get the first column (Backlog) for the project's board
 	var columnID string
 	err = h.db.QueryRow(
-		`SELECT c.id FROM columns_ c JOIN boards b ON c.board_id = b.id WHERE b.project_id = $1 ORDER BY c.position LIMIT 1`,
+		`SELECT c.id FROM core.columns_ c JOIN core.boards b ON c.board_id = b.id WHERE b.project_id = $1 ORDER BY c.position LIMIT 1`,
 		projectID,
 	).Scan(&columnID)
 	if err != nil {
@@ -377,7 +389,7 @@ func (h *Handler) CreateIssue(c *kai.Context) {
 	}
 
 	_, err = h.db.Exec(
-		`INSERT INTO issues (id, project_id, key, title, description, type, status, priority, assignee_id, reporter_id, sprint_id, column_id, story_points, parent_issue_id)
+		`INSERT INTO core.issues (id, project_id, key, title, description, type, status, priority, assignee_id, reporter_id, sprint_id, column_id, story_points, parent_issue_id)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		issueID, projectID, issueKey, title, description, issueType, "backlog", priority,
 		assigneeID, reporterID, sprintID, columnID, storyPoints, parentIssueID,
@@ -658,7 +670,7 @@ func (h *Handler) CreateLabel(c *kai.Context) {
 
 	labelID := uuid.New().String()
 	_, err = h.db.Exec(
-		`INSERT INTO labels (id, project_id, name, color) VALUES ($1, $2, $3, $4)`,
+		`INSERT INTO core.labels (id, project_id, name, color) VALUES ($1, $2, $3, $4)`,
 		labelID, projectID, name, color,
 	)
 	if err != nil {
@@ -672,7 +684,7 @@ func (h *Handler) CreateLabel(c *kai.Context) {
 func (h *Handler) ListLabels(c *kai.Context) {
 	projectID := c.Param("id")
 
-	rows, err := h.db.Query(`SELECT id, name, color FROM labels WHERE project_id = $1`, projectID)
+	rows, err := h.db.Query(`SELECT id, name, color FROM core.labels WHERE project_id = $1`, projectID)
 	if err != nil {
 		c.JSON(500, map[string]string{"error": "failed to query labels"})
 		return
@@ -704,7 +716,7 @@ func (h *Handler) AddLabel(c *kai.Context) {
 	}
 
 	_, err = h.db.Exec(
-		`INSERT INTO issue_labels (issue_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+		`INSERT INTO core.issue_labels (issue_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
 		issueID, labelID,
 	)
 	if err != nil {
@@ -731,7 +743,7 @@ func (h *Handler) CreateAttachment(c *kai.Context) {
 
 	attachmentID := uuid.New().String()
 	_, err = h.db.Exec(
-		`INSERT INTO attachments (id, issue_id, url, filename, uploaded_by) VALUES ($1, $2, $3, $4, $5)`,
+		`INSERT INTO core.attachments (id, issue_id, url, filename, uploaded_by) VALUES ($1, $2, $3, $4, $5)`,
 		attachmentID, issueID, url, filename, uploadedBy,
 	)
 	if err != nil {
@@ -740,6 +752,112 @@ func (h *Handler) CreateAttachment(c *kai.Context) {
 	}
 
 	c.JSON(201, map[string]string{"id": attachmentID, "url": url, "filename": filename})
+}
+
+// ---- Join Codes ----
+
+func generateRandomCode() string {
+	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	b := make([]byte, 6)
+	now := time.Now().UnixNano()
+	for i := range b {
+		b[i] = chars[(now+int64(i*137))%int64(len(chars))]
+	}
+	return string(b)
+}
+
+func (h *Handler) GenerateJoinCode(c *kai.Context) {
+	projectID := c.Param("id")
+	data, err := c.GetJSON()
+	if err != nil {
+		c.JSON(400, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	durationMinutes := 60
+	if dm, ok := data["duration_minutes"].(float64); ok && dm > 0 {
+		durationMinutes = int(dm)
+	}
+
+	userID := getUserID(c)
+	code := generateRandomCode()
+	expiresAt := time.Now().Add(time.Duration(durationMinutes) * time.Minute)
+
+	_, err = h.db.Exec(
+		`INSERT INTO core.project_join_codes (id, project_id, code, expires_at, created_by) VALUES ($1, $2, $3, $4, $5)`,
+		uuid.New().String(), projectID, code, expiresAt, userID,
+	)
+	if err != nil {
+		c.JSON(500, map[string]string{"error": "failed to generate join code: " + err.Error()})
+		return
+	}
+
+	c.JSON(201, map[string]interface{}{
+		"code":       code,
+		"expires_at": expiresAt.Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) JoinProject(c *kai.Context) {
+	data, err := c.GetJSON()
+	if err != nil {
+		c.JSON(400, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	code, _ := data["code"].(string)
+	if code == "" {
+		c.JSON(400, map[string]string{"error": "code is required"})
+		return
+	}
+
+	userID := getUserID(c)
+	if userID == "" {
+		c.JSON(401, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var projectID, orgID, key, name, desc string
+	var expiresAt time.Time
+	err = h.db.QueryRow(
+		`SELECT jc.project_id, p.org_id, p.key, p.name, p.description, jc.expires_at
+		 FROM core.project_join_codes jc
+		 JOIN core.projects p ON jc.project_id = p.id
+		 WHERE UPPER(jc.code) = UPPER($1)`, code,
+	).Scan(&projectID, &orgID, &key, &name, &desc, &expiresAt)
+
+	if err == sql.ErrNoRows {
+		c.JSON(404, map[string]string{"error": "invalid join passcode"})
+		return
+	}
+	if err != nil {
+		c.JSON(500, map[string]string{"error": "database error: " + err.Error()})
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		c.JSON(400, map[string]string{"error": "join passcode has expired"})
+		return
+	}
+
+	// Automatically add user to taskforge_auth.org_memberships if not already a member
+	_, err = h.db.Exec(
+		`INSERT INTO taskforge_auth.org_memberships (id, user_id, org_id, role)
+		 VALUES ($1, $2, $3, 'member')
+		 ON CONFLICT (user_id, org_id) DO NOTHING`,
+		uuid.New().String(), userID, orgID,
+	)
+	if err != nil {
+		log.Printf("Warning: failed to insert org membership: %v", err)
+	}
+
+	c.JSON(200, map[string]interface{}{
+		"id":          projectID,
+		"org_id":      orgID,
+		"key":         key,
+		"name":        name,
+		"description": desc,
+	})
 }
 
 // ---- Internal helpers ----
@@ -768,7 +886,7 @@ func (h *Handler) indexIssue(issueID, title, description, projectID string) {
 func (h *Handler) notifyGateway(issueID, eventType string, data map[string]interface{}) {
 	// Get project_id for the issue
 	var projectID string
-	h.db.QueryRow(`SELECT project_id FROM issues WHERE id = $1`, issueID).Scan(&projectID)
+	h.db.QueryRow(`SELECT project_id FROM core.issues WHERE id = $1`, issueID).Scan(&projectID)
 
 	payload := map[string]interface{}{
 		"issue_id":   issueID,

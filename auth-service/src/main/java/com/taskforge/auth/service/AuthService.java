@@ -5,6 +5,7 @@ import com.taskforge.auth.domain.User;
 import com.taskforge.auth.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.Optional;
@@ -16,19 +17,22 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
+    private final OrgService orgService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtProvider jwtProvider) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                       JwtProvider jwtProvider, OrgService orgService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtProvider = jwtProvider;
+        this.orgService = orgService;
     }
 
+    @Transactional
     public User register(String email, String password, String name) {
         if (userRepository.existsByEmail(email)) {
             throw new IllegalArgumentException("Email already registered");
         }
-        User user = new User(email, passwordEncoder.encode(password), name);
-        return userRepository.save(user);
+        return userRepository.save(new User(email, passwordEncoder.encode(password), name));
     }
 
     public Map<String, String> login(String email, String password) {

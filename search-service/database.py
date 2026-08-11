@@ -11,10 +11,9 @@ from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://taskforge:taskforge_secret@localhost:5432/taskforge_search"
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is required but not set")
 
 
 class Database:
@@ -22,8 +21,18 @@ class Database:
         self.pool: Optional[asyncpg.Pool] = None
 
     async def connect(self):
-        self.pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
-        logger.info("Connected to database")
+        self.pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=2,
+            max_size=10,
+            server_settings={"search_path": "search"},
+        )
+        # Ensure the 'search' schema exists on the shared Supabase DB
+        async with self.pool.acquire() as conn:
+            await conn.execute("CREATE SCHEMA IF NOT EXISTS search")
+            # Re-apply search_path after schema creation
+            await conn.execute("SET search_path TO search")
+        logger.info("Connected to database (schema: search)")
 
     async def disconnect(self):
         if self.pool:
