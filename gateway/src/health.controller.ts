@@ -7,7 +7,7 @@ export class HealthController {
   private coreUrl = process.env.CORE_SERVICE_URL || 'http://localhost:8081';
   private searchUrl = process.env.SEARCH_SERVICE_URL;
 
-  @Get('health')
+  @Get(['health', 'status', 'api/status'])
   async health() {
     const checkService = async (url: string, path: string) => {
       try {

@@ -137,18 +137,15 @@ function RootShell({ children }: { children: ReactNode }) {
 /** Full sidebar + content layout shown to authenticated users */
 function AuthenticatedApp() {
   return (
-    <TrackerProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset className="min-w-0">
-          <TopBar />
-          <main className="nb-grid min-w-0 flex-1 p-6 md:p-10">
-            <Outlet />
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
-      <Toaster />
-    </TrackerProvider>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset className="min-w-0">
+        <TopBar />
+        <main className="nb-grid min-w-0 flex-1 p-6 md:p-10">
+          <Outlet />
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -233,7 +230,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <InnerApp />
+        <TrackerProvider>
+          <InnerApp />
+          <Toaster />
+        </TrackerProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
