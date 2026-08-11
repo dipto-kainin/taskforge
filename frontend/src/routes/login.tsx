@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { ArrowRight, Lock, Mail, User, ShieldCheck } from "lucide-react";
+import { ArrowRight, Lock, Mail, User, ShieldCheck, Loader2 } from "lucide-react";
 import { BlockWorkLogo } from "@/components/tracker/logo";
+import { useServiceHealth, ServiceStatusWidget } from "@/components/tracker/service-status-widget";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -19,11 +20,15 @@ function LoginComponent() {
   const { login, register, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
+  const { health, loading: healthLoading, refetch: refetchHealth } = useServiceHealth();
+
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const allHealthy = health?.allHealthy ?? false;
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -33,6 +38,11 @@ function LoginComponent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!allHealthy) {
+      toast.error("Please wait for all cloud services to be ready before logging in.");
+      return;
+    }
+
     if (!email || !password || (isRegisterMode && !name)) {
       toast.error("Please fill in all required fields.");
       return;
@@ -55,7 +65,6 @@ function LoginComponent() {
     }
   };
 
-
   return (
     <div className="flex min-h-[85vh] items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
@@ -70,6 +79,9 @@ function LoginComponent() {
               : "Enter your credentials to access your workspaces."}
           </p>
         </div>
+
+        {/* Microservice Live Status Tracker */}
+        <ServiceStatusWidget health={health} loading={healthLoading} refetch={refetchHealth} />
 
         <div className="rounded-xl border border-border bg-card p-6 shadow-xl backdrop-blur-sm">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -128,11 +140,19 @@ function LoginComponent() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50"
+              disabled={loading || !allHealthy}
+              className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
-                "Processing..."
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Processing...
+                </>
+              ) : !allHealthy ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Waking up cloud services...
+                </>
               ) : (
                 <>
                   {isRegisterMode ? "Sign Up" : "Log In"}
@@ -141,9 +161,7 @@ function LoginComponent() {
               )}
             </button>
           </form>
-
         </div>
-
 
         <div className="text-center text-xs text-muted-foreground">
           {isRegisterMode ? "Already have an account?" : "Don't have an account yet?"}{" "}
