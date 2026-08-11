@@ -28,11 +28,44 @@ export const Route = createFileRoute("/assigned")({
   component: AssignedPage,
 });
 
+function AssignedSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-10 animate-pulse">
+      <header className="space-y-3">
+        <div className="h-4 w-32 rounded bg-muted/60" />
+        <div className="h-10 w-64 rounded bg-muted/80" />
+        <div className="h-4 w-40 rounded bg-muted/50" />
+      </header>
+
+      <div className="flex flex-wrap gap-3">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-8 w-20 rounded bg-muted/60" />
+        ))}
+      </div>
+
+      <ul className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <li key={i} className="nb flex flex-wrap items-center gap-4 p-5 bg-card/60">
+            <div className="h-4 w-16 rounded bg-muted/60" />
+            <div className="h-5 w-1/3 rounded bg-muted/80" />
+            <div className="h-4 w-20 rounded bg-muted/50" />
+            <div className="h-6 w-16 rounded-full bg-muted/70" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function AssignedPage() {
-  const { tickets, projects } = useTracker();
+  const { ready, tickets, projects } = useTracker();
   const auth = useAuth();
   const myId = auth?.user?.id ?? "";
   const [status, setStatus] = useState<string>("open");
+
+  if (!ready) {
+    return <AssignedSkeleton />;
+  }
 
   const mine = tickets
     .filter((t) => t.assigneeId === myId)

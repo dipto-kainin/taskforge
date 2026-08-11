@@ -51,9 +51,77 @@ function Kpi({
   );
 }
 
+function HomePageSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-12 animate-pulse">
+      {/* Header Skeleton */}
+      <header className="space-y-3">
+        <div className="h-4 w-28 rounded bg-muted/70" />
+        <div className="h-10 w-72 rounded bg-muted/80" />
+        <div className="h-4 w-96 rounded bg-muted/50" />
+      </header>
+
+      {/* KPI Cards Skeleton */}
+      <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="nb p-6 bg-card/60 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-20 rounded bg-muted/60" />
+              <div className="size-5 rounded bg-muted/80" />
+            </div>
+            <div className="h-12 w-16 rounded bg-muted/80 mt-4" />
+          </div>
+        ))}
+      </section>
+
+      {/* Completion Bar Skeleton */}
+      <section className="nb space-y-6 p-8 bg-card/60">
+        <div className="flex justify-between items-center">
+          <div className="h-5 w-40 rounded bg-muted/70" />
+          <div className="h-8 w-16 rounded bg-muted/80" />
+        </div>
+        <div className="h-6 w-full rounded border-2 border-foreground/20 bg-muted/40" />
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5 pt-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="border-2 border-foreground/20 p-4 space-y-2">
+              <div className="h-3 w-16 rounded bg-muted/60" />
+              <div className="h-6 w-8 rounded bg-muted/80" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Recent Activity Skeleton */}
+      <section className="space-y-5">
+        <div className="flex justify-between items-center">
+          <div className="h-5 w-40 rounded bg-muted/70" />
+          <div className="h-4 w-48 rounded bg-muted/50" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="nb-sm p-4 bg-card/60 space-y-3">
+              <div className="flex justify-between items-center">
+                <div className="h-3 w-16 rounded bg-muted/60" />
+                <div className="h-5 w-20 rounded-full bg-muted/70" />
+              </div>
+              <div className="h-5 w-3/4 rounded bg-muted/80" />
+              <div className="h-3 w-24 rounded bg-muted/40" />
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function HomePage() {
-  const { tickets, comments, projects, users } = useTracker();
+  const { ready, tickets, comments, projects, users } = useTracker();
   const auth = useAuth();
+
+  if (!ready) {
+    return <HomePageSkeleton />;
+  }
+
   const myId = auth?.user?.id ?? "";
   const myName = auth?.user?.name || users.find((u) => u.id === myId)?.name || "Your";
 
@@ -102,7 +170,7 @@ function HomePage() {
           <p className="font-display text-3xl">{completion}%</p>
         </div>
         <div className="h-6 w-full border-2 border-foreground bg-secondary">
-          <div className="h-full bg-primary" style={{ width: `${completion}%` }} />
+          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${completion}%` }} />
         </div>
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
           {byStatus.map((s) => (
