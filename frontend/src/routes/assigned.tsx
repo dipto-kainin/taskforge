@@ -31,25 +31,25 @@ export const Route = createFileRoute("/assigned")({
 function AssignedSkeleton() {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-10 animate-pulse">
-      <header className="space-y-3">
-        <div className="h-4 w-32 rounded bg-muted/60" />
-        <div className="h-10 w-64 rounded bg-muted/80" />
-        <div className="h-4 w-40 rounded bg-muted/50" />
+      <header className="space-y-4">
+        <div className="h-4 w-36 rounded bg-foreground/25" />
+        <div className="h-10 w-64 rounded bg-foreground/35" />
+        <div className="h-4 w-44 rounded bg-foreground/20" />
       </header>
 
       <div className="flex flex-wrap gap-3">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-8 w-20 rounded bg-muted/60" />
+          <div key={i} className="h-9 w-24 rounded border-2 border-foreground/30 bg-foreground/25" />
         ))}
       </div>
 
       <ul className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <li key={i} className="nb flex flex-wrap items-center gap-4 p-5 bg-card/60">
-            <div className="h-4 w-16 rounded bg-muted/60" />
-            <div className="h-5 w-1/3 rounded bg-muted/80" />
-            <div className="h-4 w-20 rounded bg-muted/50" />
-            <div className="h-6 w-16 rounded-full bg-muted/70" />
+        {[1, 2, 3, 4].map((i) => (
+          <li key={i} className="nb flex flex-wrap items-center gap-4 p-5 bg-card border-2 border-foreground/30">
+            <div className="h-4 w-16 rounded bg-foreground/25" />
+            <div className="h-6 w-2/5 rounded bg-foreground/35" />
+            <div className="h-4 w-24 rounded bg-foreground/20" />
+            <div className="h-6 w-20 rounded-full bg-foreground/30" />
           </li>
         ))}
       </ul>

@@ -54,38 +54,38 @@ function Kpi({
 function HomePageSkeleton() {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-12 animate-pulse">
-      {/* Header Skeleton */}
-      <header className="space-y-3">
-        <div className="h-4 w-28 rounded bg-muted/70" />
-        <div className="h-10 w-72 rounded bg-muted/80" />
-        <div className="h-4 w-96 rounded bg-muted/50" />
+      {/* Header Skeleton — Deep High Contrast */}
+      <header className="space-y-4">
+        <div className="h-4 w-32 rounded bg-foreground/25" />
+        <div className="h-12 w-80 rounded bg-foreground/35" />
+        <div className="h-4 w-full max-w-xl rounded bg-foreground/20" />
       </header>
 
       {/* KPI Cards Skeleton */}
       <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="nb p-6 bg-card/60 space-y-4">
+          <div key={i} className="nb p-6 bg-card border-2 border-foreground/30 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="h-3 w-20 rounded bg-muted/60" />
-              <div className="size-5 rounded bg-muted/80" />
+              <div className="h-3.5 w-24 rounded bg-foreground/25" />
+              <div className="size-6 rounded bg-foreground/30" />
             </div>
-            <div className="h-12 w-16 rounded bg-muted/80 mt-4" />
+            <div className="h-12 w-20 rounded bg-foreground/35 mt-4" />
           </div>
         ))}
       </section>
 
       {/* Completion Bar Skeleton */}
-      <section className="nb space-y-6 p-8 bg-card/60">
+      <section className="nb space-y-6 p-8 bg-card border-2 border-foreground/30">
         <div className="flex justify-between items-center">
-          <div className="h-5 w-40 rounded bg-muted/70" />
-          <div className="h-8 w-16 rounded bg-muted/80" />
+          <div className="h-6 w-44 rounded bg-foreground/30" />
+          <div className="h-8 w-20 rounded bg-foreground/35" />
         </div>
-        <div className="h-6 w-full rounded border-2 border-foreground/20 bg-muted/40" />
+        <div className="h-7 w-full rounded border-2 border-foreground/40 bg-foreground/15" />
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5 pt-2">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="border-2 border-foreground/20 p-4 space-y-2">
-              <div className="h-3 w-16 rounded bg-muted/60" />
-              <div className="h-6 w-8 rounded bg-muted/80" />
+            <div key={i} className="border-2 border-foreground/30 p-4 space-y-2 bg-background/50">
+              <div className="h-3.5 w-20 rounded bg-foreground/25" />
+              <div className="h-7 w-12 rounded bg-foreground/35" />
             </div>
           ))}
         </div>
@@ -94,18 +94,18 @@ function HomePageSkeleton() {
       {/* Recent Activity Skeleton */}
       <section className="space-y-5">
         <div className="flex justify-between items-center">
-          <div className="h-5 w-40 rounded bg-muted/70" />
-          <div className="h-4 w-48 rounded bg-muted/50" />
+          <div className="h-6 w-44 rounded bg-foreground/30" />
+          <div className="h-4 w-52 rounded bg-foreground/20" />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="nb-sm p-4 bg-card/60 space-y-3">
+            <div key={i} className="nb-sm p-5 bg-card border-2 border-foreground/30 space-y-4">
               <div className="flex justify-between items-center">
-                <div className="h-3 w-16 rounded bg-muted/60" />
-                <div className="h-5 w-20 rounded-full bg-muted/70" />
+                <div className="h-4 w-20 rounded bg-foreground/25 font-mono" />
+                <div className="h-6 w-24 rounded-full bg-foreground/30" />
               </div>
-              <div className="h-5 w-3/4 rounded bg-muted/80" />
-              <div className="h-3 w-24 rounded bg-muted/40" />
+              <div className="h-6 w-4/5 rounded bg-foreground/35" />
+              <div className="h-4 w-28 rounded bg-foreground/20" />
             </div>
           ))}
         </div>
