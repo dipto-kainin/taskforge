@@ -144,13 +144,6 @@ cmd_start() {
       printf "\r"; error "gateway               ${RED}timeout${NC}"; services_ok=false
     fi
 
-    printf "  ${DIM}Waiting for frontend...${NC}"
-    if wait_for_health "frontend" "http://localhost:3000" 30; then
-      printf "\r"; success "frontend              ${GREEN}healthy${NC}"
-    else
-      printf "\r"; error "frontend              ${RED}timeout${NC}"; services_ok=false
-    fi
-
     divider
 
     if $services_ok; then
@@ -161,12 +154,12 @@ cmd_start() {
 
     divider
     echo ""
-    echo -e "  ${BOLD}🌐 Frontend:${NC}    ${CYAN}http://localhost:3000${NC}"
     echo -e "  ${BOLD}📊 GraphQL:${NC}     ${CYAN}http://localhost:4000/graphql${NC}"
     echo -e "  ${BOLD}🔑 Auth API:${NC}    ${CYAN}http://localhost:8080${NC}"
     echo -e "  ${BOLD}⚙️  Core API:${NC}    ${CYAN}http://localhost:8081${NC}"
     echo -e "  ${BOLD}🔍 Search API:${NC}  ${CYAN}http://localhost:8000${NC}"
     echo -e "  ${BOLD}☁️  Database:${NC}    ${DIM}Supabase (${PG_HOST})${NC}"
+    echo -e "  ${BOLD}🌐 Frontend:${NC}    ${DIM}Deployed on Vercel (set VITE_GRAPHQL_URL to gateway URL)${NC}"
     echo ""
   fi
 }
