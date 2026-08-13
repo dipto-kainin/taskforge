@@ -2,7 +2,7 @@
 
 > **A production-deployed, polyglot microservice project management platform** — built from scratch to demonstrate full-stack system design across distributed backend services, a GraphQL API gateway, real-time WebSocket subscriptions, JWT zero-trust auth, and a premium React frontend deployed on the cloud.
 
-[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-taskforge.vercel.app-6366f1?style=for-the-badge)]([https://taskforge.vercel.app](https://taskforge-rust.vercel.app/))
+[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-taskforge.vercel.app-6366f1?style=for-the-badge)](https://taskforge-rust.vercel.app/)
 [![Auth Service](https://img.shields.io/badge/Auth_Service-onrender.com-22c55e?style=for-the-badge)](https://taskforge-x0w1.onrender.com/.well-known/jwks.json)
 [![Core Service](https://img.shields.io/badge/Core_Service-onrender.com-22c55e?style=for-the-badge)](https://taskforge-core.onrender.com/health)
 [![Gateway](https://img.shields.io/badge/GraphQL_Gateway-onrender.com-22c55e?style=for-the-badge)](https://taskforge-gateway.onrender.com/graphql)
