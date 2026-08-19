@@ -91,3 +91,26 @@ This document outlines the planned Phase 2 features for TaskForge. Each item is 
 **Why it matters:** `docker-compose` is a local development tool, not a production deployment strategy. Kubernetes provides horizontal scaling (more core-service replicas during heavy CRUD), rolling updates (deploy a new search-service version without downtime), and resource isolation (the search-service's ML model loading doesn't starve the gateway of CPU).
 
 **Why it's deferred:** The Helm charts and CI/CD pipelines are boilerplate that doesn't demonstrate architectural thinking — it's configuration, not design. The docker-compose setup in Phase 1 proves that the services are containerized and independently deployable, which is the prerequisite for Kubernetes.
+
+---
+
+## 10. Office-Hours Keep-Alive Automation (Render Free Tier)
+
+**Context:** All three backend services (auth-service, core-service, gateway) are hosted on Render's free tier, which provides 750 instance hours/month shared across the entire workspace. The auth-service (Spring Boot / JVM) has a ~125-second cold start when Render spins it down after 15 minutes of inactivity. An UptimeRobot monitor currently pings auth-service every 10 minutes to keep it warm — but this runs 24/7 and consumes ~720 hrs/month alone, leaving almost no buffer.
+
+**What it adds:** A GitHub Actions cron workflow that automatically pauses and resumes the UptimeRobot monitor on a weekday office-hours schedule (10:00 AM – 8:00 PM IST, Monday–Friday). This keeps the service warm during the hours when recruiters and hiring managers are likely to view the portfolio, while letting it sleep overnight and on weekends to conserve the monthly hour budget.
+
+**Implementation plan (ready to execute):**
+- Workflow file: `.github/workflows/render-keepalive-schedule.yml`
+- Cron: `30 4 * * 1-5` (start — 10 AM IST) and `30 14 * * 1-5` (stop — 8 PM IST)
+- Uses UptimeRobot API v2 `editMonitor` endpoint with `status=1` (resume) and `status=0` (pause)
+- Requires two GitHub repository secrets: `UPTIMEROBOT_API_KEY` and `UPTIMEROBOT_MONITOR_ID`
+- Supports manual trigger (`workflow_dispatch`) with `start`/`stop` input for immediate control
+- The workflow was fully designed and is ready to be created when needed
+
+**Projected monthly hours with this in place:**
+- Weekdays only (22 days × 10 hrs): ~220 hrs for auth-service
+- Other services (natural on-demand traffic): ~15 hrs
+- Total: ~235 hrs / 750 hrs = 31% of free allowance used
+
+**Why it's deferred:** The current 24/7 ping has only been running for a short time and the monthly budget (12 hrs used with 12 days left this month) is not yet under pressure. This automation becomes important at the start of the next billing month when the full 720 hrs/month cost of 24/7 pinging would be felt.
