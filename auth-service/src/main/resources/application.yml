@@ -6,6 +6,9 @@ spring:
   application:
     name: auth-service
 
+  jmx:
+    enabled: false
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres?currentSchema=taskforge_auth&sslmode=disable}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -13,7 +16,7 @@ spring:
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 3       # Supabase free tier connection limit
-      minimum-idle: 1            # Keep 1 connection idle
+      minimum-idle: 0            # Lazy connection initialization to speed up boot
       connection-timeout: 20000  # 20s connection timeout
       idle-timeout: 300000       # 5 min idle timeout
       max-lifetime: 1200000      # 20 min max lifetime
@@ -25,16 +28,17 @@ spring:
       mode: ${SPRING_SQL_INIT_MODE:never}
 
   jpa:
+    open-in-view: false
     hibernate:
-      # validate = check schema matches entities, no DDL changes. Use 'update' only via ./taskforge.sh migrate auth
-      ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
+      # none = skip schema validation during normal boot to save startup time; use 'update' via ./taskforge.sh migrate auth
+      ddl-auto: ${HIBERNATE_DDL_AUTO:none}
     show-sql: false
     properties:
       hibernate:
         format_sql: true
         default_schema: taskforge_auth
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        temp.use_jdbc_metadata_defaults: false
+        boot:
+          allow_jdbc_metadata: false
 
 server:
   port: 8080
