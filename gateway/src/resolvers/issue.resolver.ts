@@ -32,6 +32,11 @@ export class IssueResolver {
   }
 
   @Mutation()
+  async deleteIssue(@Args('id') id: string, @Context() context: any) {
+    return this.proxy.deleteIssue(id, context);
+  }
+
+  @Mutation()
   async createComment(
     @Args('issueId') issueId: string,
     @Args('body') body: string,

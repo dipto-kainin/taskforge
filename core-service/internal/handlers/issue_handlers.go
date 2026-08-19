@@ -236,3 +236,19 @@ func (h *Handler) UpdateIssue(c *kai.Context) {
 
 	c.JSON(200, map[string]string{"message": "issue updated"})
 }
+
+func (h *Handler) DeleteIssue(c *kai.Context) {
+	id := c.Param("id")
+	result, err := h.db.Exec(`DELETE FROM core.issues WHERE id = $1`, id)
+	if err != nil {
+		c.JSON(500, map[string]string{"error": "failed to delete issue: " + err.Error()})
+		return
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(404, map[string]string{"error": "issue not found"})
+		return
+	}
+	c.JSON(200, map[string]string{"message": "issue deleted"})
+}
+

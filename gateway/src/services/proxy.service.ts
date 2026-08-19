@@ -227,6 +227,13 @@ export class ProxyService {
     return this.getIssue(id, context);
   }
 
+  async deleteIssue(id: string, context: any) {
+    await axios.delete(`${this.coreUrl}/api/issues/${id}`, {
+      headers: this.getHeaders(context),
+    });
+    return true;
+  }
+
   // ---- Core Service — Comments ----
 
   async createComment(issueId: string, body: string, context: any) {

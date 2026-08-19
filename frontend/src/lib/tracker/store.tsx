@@ -120,6 +120,12 @@ const UPDATE_ISSUE_MUTATION = `
   }
 `;
 
+const DELETE_ISSUE_MUTATION = `
+  mutation DeleteIssue($id: ID!) {
+    deleteIssue(id: $id)
+  }
+`;
+
 const CREATE_COMMENT_MUTATION = `
   mutation CreateComment($issueId: ID!, $body: String!) {
     createComment(issueId: $issueId, body: $body) {
@@ -386,13 +392,22 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
     [isAuthenticated]
   );
 
-  const deleteTicket = useCallback<TrackerContextValue["deleteTicket"]>((id) => {
-    setData((prev) => ({
-      ...prev,
-      tickets: prev.tickets.filter((t) => t.id !== id),
-      comments: prev.comments.filter((c) => c.ticketId !== id),
-    }));
-  }, []);
+  const deleteTicket = useCallback<TrackerContextValue["deleteTicket"]>(
+    (id) => {
+      setData((prev) => ({
+        ...prev,
+        tickets: prev.tickets.filter((t) => t.id !== id),
+        comments: prev.comments.filter((c) => c.ticketId !== id),
+      }));
+
+      if (isAuthenticated) {
+        graphqlRequest(DELETE_ISSUE_MUTATION, { id }).catch((err) =>
+          console.error("Error deleting issue in backend:", err)
+        );
+      }
+    },
+    [isAuthenticated]
+  );
 
   const addComment = useCallback<TrackerContextValue["addComment"]>(
     (ticketId, body, authorId) => {

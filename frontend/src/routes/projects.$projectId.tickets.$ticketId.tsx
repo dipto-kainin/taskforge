@@ -16,6 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useProject, useTracker } from "@/lib/tracker/store";
 import { useAuth } from "@/lib/auth-context";
@@ -73,6 +84,12 @@ function TicketPage() {
     setDraft("");
   };
 
+  const handleDelete = () => {
+    deleteTicket(ticket.id);
+    toast.success(`Task ${ticket.key} deleted`);
+    navigate({ to: "/projects/$projectId/board", params: { projectId } });
+  };
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -82,19 +99,36 @@ function TicketPage() {
             {project.name}
           </Link>
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={() => {
-            deleteTicket(ticket.id);
-            toast.success(`Struck ${ticket.key} from the rolls`);
-            navigate({ to: "/projects/$projectId/board", params: { projectId } });
-          }}
-        >
-          <Trash2 className="size-4" />
-          Burn scroll
-        </Button>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:bg-destructive hover:text-destructive-foreground gap-1.5 font-medium"
+            >
+              <Trash2 className="size-4" />
+              Delete Task
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Task</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete task <strong>{ticket.key}</strong>? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_16rem]">
@@ -110,12 +144,12 @@ function TicketPage() {
           </div>
 
           <section className="space-y-2">
-            <h2 className="label-caps">Contract terms</h2>
+            <h2 className="label-caps">Description</h2>
             <Textarea
               value={ticket.description}
               onChange={(e) => updateTicket(ticket.id, { description: e.target.value })}
               rows={5}
-              placeholder="Terms, reward, known dangers…"
+              placeholder="Detailed task description or notes…"
             />
           </section>
 
@@ -143,7 +177,7 @@ function TicketPage() {
               })}
               {thread.length === 0 && (
                 <li className="rounded-sm border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                  No notes pinned to this contract yet.
+                  No comments on this task yet.
                 </li>
               )}
             </ul>
@@ -156,7 +190,7 @@ function TicketPage() {
               />
               <div className="flex justify-end">
                 <Button size="sm" onClick={postComment}>
-                  Post note
+                  Post comment
                 </Button>
               </div>
             </div>
@@ -165,7 +199,7 @@ function TicketPage() {
 
         <aside className="space-y-4 rounded-sm border border-border bg-surface/60 p-4">
           <div className="space-y-1.5">
-            <Label>Pillar</Label>
+            <Label>Status</Label>
             <Select
               value={ticket.status}
               onValueChange={(v) => updateTicket(ticket.id, { status: v as Status })}
@@ -184,7 +218,7 @@ function TicketPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Skulls of danger</Label>
+            <Label>Priority</Label>
             <Select
               value={ticket.priority}
               onValueChange={(v) => updateTicket(ticket.id, { priority: v as Priority })}
@@ -214,7 +248,7 @@ function TicketPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="unassigned">Unclaimed</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
                 {users.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
                     {u.name}
@@ -231,7 +265,7 @@ function TicketPage() {
                 <Input
                   value={labelDraft}
                   onChange={(e) => setLabelDraft(e.target.value)}
-                  placeholder="beast, escort"
+                  placeholder="e.g. bug, frontend"
                   className="h-9"
                 />
                 <Button

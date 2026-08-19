@@ -27,6 +27,7 @@ type Mutation {
 
   createIssue(input: CreateIssueInput!): Issue!
   updateIssue(id: ID!, input: UpdateIssueInput!): Issue!
+  deleteIssue(id: ID!): Boolean!
 
   createComment(issueId: ID!, body: String!): Comment!
   createLabel(projectId: ID!, name: String!, color: String): Label!

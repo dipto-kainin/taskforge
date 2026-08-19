@@ -104,6 +104,7 @@ func main() {
 	api.POST("/issues", authMW, h.CreateIssue)
 	api.GET("/issues/:id", authMW, h.GetIssue)
 	api.PATCH("/issues/:id", authMW, h.UpdateIssue)
+	api.DELETE("/issues/:id", authMW, h.DeleteIssue)
 
 	// Comment routes
 	api.POST("/issues/:id/comments", authMW, h.CreateComment)
