@@ -1,6 +1,6 @@
 logging:
   level:
-    org.springframework.security: TRACE
+    org.springframework.security: INFO
 
 spring:
   application:
@@ -33,6 +33,8 @@ spring:
       hibernate:
         format_sql: true
         default_schema: taskforge_auth
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        temp.use_jdbc_metadata_defaults: false
 
 server:
   port: 8080
