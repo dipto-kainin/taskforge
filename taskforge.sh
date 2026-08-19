@@ -241,9 +241,9 @@ cmd_dev() {
     cd "$SCRIPT_DIR/core-service"
     DATABASE_URL="$CORE_DB_URL" \
     JWKS_URL="$JWKS_LOCAL" \
+    AUTH_SERVICE_URL="http://localhost:8080" \
     SEARCH_SERVICE_URL="http://localhost:8000" \
     GATEWAY_NOTIFY_URL="http://localhost:4000/internal/notify" \
-    AUTO_MIGRATE=false \
     PORT="8081" \
     go run ./cmd/main.go 2>&1
   ) > "$LOGS_DIR/core-service.log" 2>&1 &
@@ -372,8 +372,9 @@ cmd_migrate() {
 
   _migrate_auth() {
     step "auth-service  [JPA / Hibernate DDL]"
-    info "Restarting auth-service to re-apply schema + table creation..."
-    $DC restart auth-service 2>/dev/null
+    info "Running auth-service migrations on database..."
+    HIBERNATE_DDL_AUTO=update SPRING_SQL_INIT_MODE=always $DC exec -T auth-service java -jar app.jar --spring.jpa.hibernate.ddl-auto=update --spring.sql.init.mode=always 2>/dev/null || \
+    HIBERNATE_DDL_AUTO=update SPRING_SQL_INIT_MODE=always $DC restart auth-service 2>/dev/null
     success "auth-service migrations applied"
     divider
   }

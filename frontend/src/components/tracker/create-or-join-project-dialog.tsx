@@ -18,23 +18,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { graphqlRequest } from "@/lib/graphql-client";
 import { useTracker } from "@/lib/tracker/store";
-import { useAuth } from "@/lib/auth-context";
-
-const CREATE_ORG_MUTATION = `
-  mutation CreateOrg($input: CreateOrgInput!) {
-    createOrganization(input: $input) {
-      id
-      name
-      slug
-    }
-  }
-`;
 
 const CREATE_PROJECT_MUTATION = `
   mutation CreateProject($input: CreateProjectInput!) {
     createProject(input: $input) {
       id
-      orgId
       key
       name
       description
@@ -46,7 +34,6 @@ const JOIN_PROJECT_MUTATION = `
   mutation JoinProjectWithCode($code: String!) {
     joinProjectWithCode(code: $code) {
       id
-      orgId
       key
       name
       description
@@ -56,7 +43,6 @@ const JOIN_PROJECT_MUTATION = `
 
 export function CreateOrJoinProjectDialog({ trigger }: { trigger: ReactNode }) {
   const { refetchData } = useTracker();
-  const auth = useAuth();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"create" | "join">("create");
   const [loading, setLoading] = useState(false);
@@ -96,29 +82,8 @@ export function CreateOrJoinProjectDialog({ trigger }: { trigger: ReactNode }) {
 
     setLoading(true);
     try {
-      // 1. Fetch user orgs or create default org if user has none
-      const getOrgsRes = await graphqlRequest<{
-        organizations: { id: string; name: string }[];
-      }>(`query { organizations { id name } }`);
-
-      let orgId = getOrgsRes.organizations?.[0]?.id;
-
-      if (!orgId) {
-        // Auto-create workspace for user
-        const userName = auth?.user?.name || "My";
-        const slug = `workspace-${Math.random().toString(36).slice(2, 8)}`;
-        const newOrgRes = await graphqlRequest<{
-          createOrganization: { id: string };
-        }>(CREATE_ORG_MUTATION, {
-          input: { name: `${userName}'s Workspace`, slug },
-        });
-        orgId = newOrgRes.createOrganization.id;
-      }
-
-      // 2. Create the project
       await graphqlRequest(CREATE_PROJECT_MUTATION, {
         input: {
-          orgId,
           name: name.trim(),
           key: key.trim().toUpperCase(),
           description: description.trim(),

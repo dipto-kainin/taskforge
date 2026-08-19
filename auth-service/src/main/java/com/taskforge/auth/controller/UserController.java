@@ -29,6 +29,18 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/by-email")
+    public ResponseEntity<?> getUserByEmail(@RequestParam String email) {
+        return userRepository.findByEmail(email)
+                .map(u -> ResponseEntity.ok(Map.of(
+                        "id", u.getId().toString(),
+                        "email", u.getEmail(),
+                        "name", u.getName(),
+                        "avatarUrl", u.getAvatarUrl() != null ? u.getAvatarUrl() : ""
+                )))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping("/batch")
     public ResponseEntity<?> batchGetUsers(@RequestBody Map<String, List<String>> body) {
         List<String> ids = body.getOrDefault("ids", List.of());

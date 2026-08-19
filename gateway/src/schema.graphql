@@ -1,10 +1,8 @@
 type Query {
   me: User
-  organizations: [Organization!]!
-  organization(id: ID!): Organization
+  myProjects: [Project!]!
   project(id: ID!): Project
-  projects(orgId: ID!): [Project!]!
-  orgMembers(orgId: ID!): [OrgMember!]!
+  projectMembers(projectId: ID!): [ProjectMember!]!
   board(projectId: ID!): Board
   issue(id: ID!): Issue
   sprints(projectId: ID!): [Sprint!]!
@@ -17,17 +15,15 @@ type Mutation {
   login(input: LoginInput!): AuthPayload!
   refreshToken(refreshToken: String!): TokenPayload!
 
-  createOrganization(input: CreateOrgInput!): Organization!
-  inviteToOrg(orgId: ID!, email: String!, role: String): InviteResult!
-  removeFromOrg(orgId: ID!, userId: ID!): Boolean!
-  updateMemberRole(orgId: ID!, userId: ID!, role: String!): OrgMember!
-  createTeam(orgId: ID!, name: String!): Team!
-
   createProject(input: CreateProjectInput!): Project!
   joinProjectWithCode(code: String!): Project!
   generateProjectJoinCode(projectId: ID!, durationMinutes: Int!): ProjectJoinCode!
   createSprint(projectId: ID!, input: CreateSprintInput!): Sprint!
   updateSprint(id: ID!, status: String!): Sprint!
+
+  inviteToProject(projectId: ID!, email: String!, role: String): ProjectMember!
+  removeFromProject(projectId: ID!, userId: ID!): Boolean!
+  updateProjectMemberRole(projectId: ID!, userId: ID!, role: String!): ProjectMember!
 
   createIssue(input: CreateIssueInput!): Issue!
   updateIssue(id: ID!, input: UpdateIssueInput!): Issue!
@@ -58,13 +54,7 @@ input LoginInput {
   password: String!
 }
 
-input CreateOrgInput {
-  name: String!
-  slug: String!
-}
-
 input CreateProjectInput {
-  orgId: ID!
   key: String!
   name: String!
   description: String
@@ -141,39 +131,21 @@ type User {
   avatarUrl: String
 }
 
-type Organization {
+type ProjectMember {
   id: ID!
   name: String!
-  slug: String!
-  createdAt: String
-  members: [OrgMember!]
-}
-
-type OrgMember {
-  id: ID!
   email: String!
-  name: String!
   avatarUrl: String
   role: String!
 }
 
-type InviteResult {
-  message: String!
-  role: String!
-}
-
-type Team {
-  id: ID!
-  name: String!
-}
-
 type Project {
   id: ID!
-  orgId: ID!
   key: String!
   name: String!
   description: String
   createdAt: String
+  myRole: String
 }
 
 type Board {

@@ -77,74 +77,10 @@ export class ProxyService {
     }
   }
 
-  async getOrganizations(context: any) {
-    const { data } = await axios.get(`${this.authUrl}/api/orgs`, {
-      headers: this.getHeaders(context),
-    });
-    return data;
-  }
+  // ---- Core Service — Projects ----
 
-  async getOrganization(id: string, context: any) {
-    const { data } = await axios.get(`${this.authUrl}/api/orgs`, {
-      headers: this.getHeaders(context),
-    });
-    const org = data.find((o: any) => o.id === id);
-    return org || null;
-  }
-
-  async createOrganization(input: any, context: any) {
-    const { data } = await axios.post(`${this.authUrl}/api/orgs`, input, {
-      headers: this.getHeaders(context),
-    });
-    return data;
-  }
-
-  async inviteToOrg(orgId: string, email: string, role: string, context: any) {
-    const { data } = await axios.post(
-      `${this.authUrl}/api/orgs/${orgId}/invite`,
-      { email, role },
-      { headers: this.getHeaders(context) },
-    );
-    return data;
-  }
-
-  async removeFromOrg(orgId: string, userId: string, context: any) {
-    const { data } = await axios.delete(
-      `${this.authUrl}/api/orgs/${orgId}/members/${userId}`,
-      { headers: this.getHeaders(context) },
-    );
-    return data;
-  }
-
-  async updateMemberRole(orgId: string, userId: string, role: string, context: any) {
-    const { data } = await axios.patch(
-      `${this.authUrl}/api/orgs/${orgId}/members/${userId}`,
-      { role },
-      { headers: this.getHeaders(context) },
-    );
-    return data;
-  }
-
-  async getOrgMembers(orgId: string, context: any) {
-    const { data } = await axios.get(`${this.authUrl}/api/orgs/${orgId}/members`, {
-      headers: this.getHeaders(context),
-    });
-    return data;
-  }
-
-  async createTeam(orgId: string, name: string, context: any) {
-    const { data } = await axios.post(
-      `${this.authUrl}/api/orgs/${orgId}/teams`,
-      { name },
-      { headers: this.getHeaders(context) },
-    );
-    return data;
-  }
-
-  // ---- Core Service ----
-
-  async getProjects(orgId: string, context: any) {
-    const { data } = await axios.get(`${this.coreUrl}/api/orgs/${orgId}/projects`, {
+  async getMyProjects(context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/projects`, {
       headers: this.getHeaders(context),
     });
     return data;
@@ -159,7 +95,6 @@ export class ProxyService {
 
   async createProject(input: any, context: any) {
     const { data } = await axios.post(`${this.coreUrl}/api/projects`, {
-      org_id: input.orgId,
       key: input.key,
       name: input.name,
       description: input.description || '',
@@ -188,12 +123,50 @@ export class ProxyService {
     return data;
   }
 
+  // ---- Core Service — Project Members ----
+
+  async getProjectMembers(projectId: string, context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/projects/${projectId}/members`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
+  async inviteToProject(projectId: string, email: string, role: string, context: any) {
+    const { data } = await axios.post(
+      `${this.coreUrl}/api/projects/${projectId}/members`,
+      { email, role },
+      { headers: this.getHeaders(context) },
+    );
+    return data;
+  }
+
+  async removeFromProject(projectId: string, userId: string, context: any) {
+    await axios.delete(
+      `${this.coreUrl}/api/projects/${projectId}/members/${userId}`,
+      { headers: this.getHeaders(context) },
+    );
+  }
+
+  async updateProjectMemberRole(projectId: string, userId: string, role: string, context: any) {
+    const { data } = await axios.patch(
+      `${this.coreUrl}/api/projects/${projectId}/members/${userId}`,
+      { role },
+      { headers: this.getHeaders(context) },
+    );
+    return data;
+  }
+
+  // ---- Core Service — Board ----
+
   async getBoard(projectId: string, context: any) {
     const { data } = await axios.get(`${this.coreUrl}/api/projects/${projectId}/board`, {
       headers: this.getHeaders(context),
     });
     return data;
   }
+
+  // ---- Core Service — Sprints ----
 
   async createSprint(projectId: string, input: any, context: any) {
     const { data } = await axios.post(`${this.coreUrl}/api/projects/${projectId}/sprints`, {
@@ -210,6 +183,8 @@ export class ProxyService {
     });
     return data;
   }
+
+  // ---- Core Service — Issues ----
 
   async getIssue(id: string, context: any) {
     const { data } = await axios.get(`${this.coreUrl}/api/issues/${id}`, {
@@ -252,6 +227,8 @@ export class ProxyService {
     return this.getIssue(id, context);
   }
 
+  // ---- Core Service — Comments ----
+
   async createComment(issueId: string, body: string, context: any) {
     const { data } = await axios.post(`${this.coreUrl}/api/issues/${issueId}/comments`, { body }, {
       headers: this.getHeaders(context),
@@ -265,6 +242,8 @@ export class ProxyService {
     });
     return data;
   }
+
+  // ---- Core Service — Labels ----
 
   async createLabel(projectId: string, name: string, color: string, context: any) {
     const { data } = await axios.post(`${this.coreUrl}/api/projects/${projectId}/labels`, {

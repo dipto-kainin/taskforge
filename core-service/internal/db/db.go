@@ -38,7 +38,6 @@ func Migrate(db *sql.DB) error {
 		`CREATE SCHEMA IF NOT EXISTS core`,
 		`CREATE TABLE IF NOT EXISTS core.projects (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			org_id UUID NOT NULL,
 			key VARCHAR(10) NOT NULL,
 			name VARCHAR(255) NOT NULL,
 			description TEXT DEFAULT '',
@@ -116,8 +115,25 @@ func Migrate(db *sql.DB) error {
 			created_by UUID NOT NULL,
 			created_at TIMESTAMPTZ DEFAULT NOW()
 		)`,
+		// Project-level membership — replaces org_memberships
+		`CREATE TABLE IF NOT EXISTS core.project_members (
+			project_id UUID NOT NULL REFERENCES core.projects(id) ON DELETE CASCADE,
+			user_id    UUID NOT NULL,
+			role       VARCHAR(20) NOT NULL DEFAULT 'member',
+			joined_at  TIMESTAMPTZ DEFAULT NOW(),
+			PRIMARY KEY (project_id, user_id)
+		)`,
 		// Create sequence for issue keys
 		`CREATE SEQUENCE IF NOT EXISTS core.issue_key_seq START 1`,
+		// Idempotent schema migration: drop org_id if it still exists (legacy)
+		`DO $$ BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_schema = 'core' AND table_name = 'projects' AND column_name = 'org_id'
+			) THEN
+				ALTER TABLE core.projects DROP COLUMN org_id;
+			END IF;
+		END $$`,
 	}
 
 	for _, m := range migrations {

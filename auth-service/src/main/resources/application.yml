@@ -19,14 +19,15 @@ spring:
       max-lifetime: 1200000      # 20 min max lifetime
       keepalive-time: 30000      # 30s TCP keepalive to prevent firewall/Supabase drop
 
-  # Run schema.sql before Hibernate DDL to ensure 'taskforge_auth' schema exists
+  # Run schema.sql only when SPRING_SQL_INIT_MODE=always is set (i.e. during ./taskforge.sh migrate auth)
   sql:
     init:
-      mode: always
+      mode: ${SPRING_SQL_INIT_MODE:never}
 
   jpa:
     hibernate:
-      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+      # validate = check schema matches entities, no DDL changes. Use 'update' only via ./taskforge.sh migrate auth
+      ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
     show-sql: false
     properties:
       hibernate:

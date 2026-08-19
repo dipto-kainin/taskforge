@@ -1,6 +1,6 @@
 export type Status = "backlog" | "todo" | "in_progress" | "in_review" | "done";
 export type Priority = "lowest" | "low" | "medium" | "high" | "urgent";
-export type OrgRole = "owner" | "admin" | "member";
+export type ProjectRole = "owner" | "admin" | "member";
 
 export interface User {
   id: string;
@@ -8,7 +8,7 @@ export interface User {
   email?: string;
   avatarUrl?: string | null | undefined;
   initials: string;
-  role?: OrgRole;
+  role?: ProjectRole;
 }
 
 export interface Comment {
@@ -36,11 +36,11 @@ export interface Ticket {
 
 export interface Project {
   id: string;
-  orgId: string;
   key: string;
   name: string;
   description: string;
   counter: number;
+  myRole?: ProjectRole;
 }
 
 export interface TrackerData {
