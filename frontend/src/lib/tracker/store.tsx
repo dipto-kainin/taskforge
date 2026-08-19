@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import type { Priority, Status, Ticket, TrackerData, Project, User, OrgRole } from "./types";
+import type { Priority, Status, Ticket, TrackerData, Project, User, ProjectRole } from "./types";
 import { graphqlRequest } from "../graphql-client";
 import { useAuth } from "../auth-context";
 
@@ -36,31 +36,21 @@ interface TrackerContextValue extends TrackerData {
 
 const TrackerContext = createContext<TrackerContextValue | null>(null);
 
-const GET_ORGS_AND_PROJECTS = `
-  query GetOrgsAndProjects {
-    organizations {
+const GET_MY_PROJECTS_QUERY = `
+  query GetMyProjects {
+    myProjects {
       id
-      name
-      slug
-    }
-  }
-`;
-
-const GET_PROJECTS_QUERY = `
-  query GetProjects($orgId: ID!) {
-    projects(orgId: $orgId) {
-      id
-      orgId
       key
       name
       description
+      myRole
     }
   }
 `;
 
-const GET_ORG_MEMBERS_QUERY = `
-  query GetOrgMembers($orgId: ID!) {
-    orgMembers(orgId: $orgId) {
+const GET_PROJECT_MEMBERS_QUERY = `
+  query GetProjectMembers($projectId: ID!) {
+    projectMembers(projectId: $projectId) {
       id
       name
       email
@@ -168,63 +158,57 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
   const refetchData = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const orgData = await graphqlRequest<{ organizations: { id: string; name: string }[] }>(
-        GET_ORGS_AND_PROJECTS
-      );
-
-      const orgs = orgData.organizations || [];
-      const firstOrg = orgs[0];
-      if (!firstOrg) {
-        setData(EMPTY_DATA);
-        return;
-      }
-
+      // 1. Fetch all projects the current user belongs to (project-level membership)
       const projData = await graphqlRequest<{
-        projects: { id: string; key: string; name: string; description?: string }[];
-      }>(GET_PROJECTS_QUERY, { orgId: firstOrg.id });
+        myProjects: { id: string; key: string; name: string; description?: string; myRole?: string }[];
+      }>(GET_MY_PROJECTS_QUERY);
 
-      const fetchedProjects: Project[] = (projData.projects || []).map((p) => ({
+      const fetchedProjects: Project[] = (projData.myProjects || []).map((p) => ({
         id: p.id,
-        orgId: firstOrg.id,
         key: p.key,
         name: p.name,
         description: p.description || "",
         counter: 10,
+        myRole: (p.myRole as ProjectRole) || "member",
       }));
 
-      // Fetch real org members to populate the assignee picker
-      let fetchedUsers: User[] = [];
-      try {
-        const membersRes = await graphqlRequest<{
-          orgMembers: { id: string; name: string; email: string; avatarUrl?: string; role: string }[];
-        }>(GET_ORG_MEMBERS_QUERY, { orgId: firstOrg.id });
-        fetchedUsers = (membersRes.orgMembers || []).map((m) => ({
-          id: m.id,
-          name: m.name,
-          email: m.email,
-          avatarUrl: m.avatarUrl ?? null,
-          initials: m.name
-            .split(" ")
-            .map((w) => w[0])
-            .join("")
-            .toUpperCase()
-            .slice(0, 2),
-          role: m.role as OrgRole,
-        }));
-      } catch {
-        /* member fetch failed — users remain empty */
+      // 2. Fetch members for each project and deduplicate by user ID (for assignee picker)
+      const userMap = new Map<string, User>();
+      for (const proj of fetchedProjects) {
+        try {
+          const membersRes = await graphqlRequest<{
+            projectMembers: { id: string; name: string; email: string; avatarUrl?: string; role: string }[];
+          }>(GET_PROJECT_MEMBERS_QUERY, { projectId: proj.id });
+
+          for (const m of membersRes.projectMembers || []) {
+            if (!userMap.has(m.id)) {
+              userMap.set(m.id, {
+                id: m.id,
+                name: m.name,
+                email: m.email,
+                avatarUrl: m.avatarUrl ?? null,
+                initials: m.name
+                  .split(" ")
+                  .map((w) => w[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2),
+                role: m.role as ProjectRole,
+              });
+            }
+          }
+        } catch {
+          /* skip if members fetch fails for this project */
+        }
       }
+      const fetchedUsers = Array.from(userMap.values());
 
       if (fetchedProjects.length === 0) {
-        setData({
-          projects: [],
-          tickets: [],
-          users: fetchedUsers,
-          comments: [],
-        });
+        setData({ projects: [], tickets: [], users: fetchedUsers, comments: [] });
         return;
       }
 
+      // 3. Fetch board issues for each project
       let allTickets: Ticket[] = [];
       for (const proj of fetchedProjects) {
         try {

@@ -6,15 +6,15 @@ export class ProjectResolver {
   constructor(private proxy: ProxyService) {}
 
   @Query()
-  async projects(@Args('orgId') orgId: string, @Context() context: any) {
-    const data = await this.proxy.getProjects(orgId, context);
+  async myProjects(@Context() context: any) {
+    const data = await this.proxy.getMyProjects(context);
     return data.map((p: any) => ({
       id: p.id,
-      orgId: p.org_id,
       key: p.key,
       name: p.name,
       description: p.description,
       createdAt: p.created_at,
+      myRole: p.my_role,
     }));
   }
 
@@ -23,12 +23,23 @@ export class ProjectResolver {
     const p = await this.proxy.getProject(id, context);
     return {
       id: p.id,
-      orgId: p.org_id,
       key: p.key,
       name: p.name,
       description: p.description,
       createdAt: p.created_at,
     };
+  }
+
+  @Query()
+  async projectMembers(@Args('projectId') projectId: string, @Context() context: any) {
+    const members = await this.proxy.getProjectMembers(projectId, context);
+    return members.map((m: any) => ({
+      id: m.id,
+      name: m.name || '',
+      email: m.email || '',
+      avatarUrl: m.avatar_url || null,
+      role: m.role,
+    }));
   }
 
   @Query()
@@ -56,7 +67,6 @@ export class ProjectResolver {
     const p = await this.proxy.createProject(input, context);
     return {
       id: p.id,
-      orgId: p.org_id,
       key: p.key,
       name: p.name,
       description: p.description,
@@ -77,10 +87,53 @@ export class ProjectResolver {
     const p = await this.proxy.joinProjectWithCode(code, context);
     return {
       id: p.id,
-      orgId: p.org_id,
       key: p.key,
       name: p.name,
       description: p.description,
+    };
+  }
+
+  @Mutation()
+  async inviteToProject(
+    @Args('projectId') projectId: string,
+    @Args('email') email: string,
+    @Args('role') role: string,
+    @Context() context: any,
+  ) {
+    const m = await this.proxy.inviteToProject(projectId, email, role || 'member', context);
+    return {
+      id: m.id,
+      name: m.name || '',
+      email: m.email || '',
+      avatarUrl: m.avatarUrl || m.avatar_url || null,
+      role: m.role,
+    };
+  }
+
+  @Mutation()
+  async removeFromProject(
+    @Args('projectId') projectId: string,
+    @Args('userId') userId: string,
+    @Context() context: any,
+  ) {
+    await this.proxy.removeFromProject(projectId, userId, context);
+    return true;
+  }
+
+  @Mutation()
+  async updateProjectMemberRole(
+    @Args('projectId') projectId: string,
+    @Args('userId') userId: string,
+    @Args('role') role: string,
+    @Context() context: any,
+  ) {
+    const m = await this.proxy.updateProjectMemberRole(projectId, userId, role, context);
+    return {
+      id: m.id,
+      name: m.name || '',
+      email: m.email || '',
+      avatarUrl: m.avatar_url || null,
+      role: m.role,
     };
   }
 

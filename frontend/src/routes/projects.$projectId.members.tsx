@@ -42,7 +42,7 @@ import {
 import { useProject, useTracker } from "@/lib/tracker/store";
 import { useAuth } from "@/lib/auth-context";
 import { graphqlRequest } from "@/lib/graphql-client";
-import type { OrgRole, User } from "@/lib/tracker/types";
+import type { ProjectRole, User } from "@/lib/tracker/types";
 
 // @ts-ignore
 export const Route = createFileRoute("/projects/$projectId/members")({
@@ -65,24 +65,27 @@ const GENERATE_JOIN_CODE_MUTATION = `
     }
   }
 `;
+
 const INVITE_MUTATION = `
-  mutation InviteToOrg($orgId: ID!, $email: String!, $role: String) {
-    inviteToOrg(orgId: $orgId, email: $email, role: $role) {
-      message
+  mutation InviteToProject($projectId: ID!, $email: String!, $role: String) {
+    inviteToProject(projectId: $projectId, email: $email, role: $role) {
+      id
+      name
+      email
       role
     }
   }
 `;
 
 const REMOVE_MUTATION = `
-  mutation RemoveFromOrg($orgId: ID!, $userId: ID!) {
-    removeFromOrg(orgId: $orgId, userId: $userId)
+  mutation RemoveFromProject($projectId: ID!, $userId: ID!) {
+    removeFromProject(projectId: $projectId, userId: $userId)
   }
 `;
 
 const UPDATE_ROLE_MUTATION = `
-  mutation UpdateMemberRole($orgId: ID!, $userId: ID!, $role: String!) {
-    updateMemberRole(orgId: $orgId, userId: $userId, role: $role) {
+  mutation UpdateProjectMemberRole($projectId: ID!, $userId: ID!, $role: String!) {
+    updateProjectMemberRole(projectId: $projectId, userId: $userId, role: $role) {
       id
       role
     }
@@ -90,13 +93,13 @@ const UPDATE_ROLE_MUTATION = `
 `;
 
 // ── Role metadata ────────────────────────────────────────────────
-const ROLE_META: Record<OrgRole, { label: string; icon: typeof Crown; color: string }> = {
+const ROLE_META: Record<ProjectRole, { label: string; icon: typeof Crown; color: string }> = {
   owner: { label: "Owner", icon: Crown, color: "bg-urgent text-urgent-foreground" },
   admin: { label: "Admin", icon: Shield, color: "bg-progress text-progress-foreground" },
   member: { label: "Member", icon: UserIcon, color: "bg-secondary text-secondary-foreground" },
 };
 
-function RoleBadge({ role }: { role: OrgRole }) {
+function RoleBadge({ role }: { role: ProjectRole }) {
   const meta = ROLE_META[role];
   const Icon = meta.icon;
   return (
@@ -110,10 +113,10 @@ function RoleBadge({ role }: { role: OrgRole }) {
 }
 
 // ── Invite Dialog ────────────────────────────────────────────────
-function InviteDialog({ orgId, onSuccess }: { orgId: string; onSuccess: () => void }) {
+function InviteDialog({ projectId, onSuccess }: { projectId: string; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<OrgRole>("member");
+  const [role, setRole] = useState<ProjectRole>("member");
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
@@ -123,7 +126,7 @@ function InviteDialog({ orgId, onSuccess }: { orgId: string; onSuccess: () => vo
     }
     setLoading(true);
     try {
-      await graphqlRequest(INVITE_MUTATION, { orgId, email: email.trim(), role });
+      await graphqlRequest(INVITE_MUTATION, { projectId, email: email.trim(), role });
       toast.success(`Invited ${email} as ${role}.`);
       setEmail("");
       setRole("member");
@@ -166,7 +169,7 @@ function InviteDialog({ orgId, onSuccess }: { orgId: string; onSuccess: () => vo
           </div>
           <div className="grid gap-2">
             <Label htmlFor="invite-role">Role</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as OrgRole)}>
+            <Select value={role} onValueChange={(v) => setRole(v as ProjectRole)}>
               <SelectTrigger id="invite-role">
                 <SelectValue />
               </SelectTrigger>
@@ -191,31 +194,31 @@ function InviteDialog({ orgId, onSuccess }: { orgId: string; onSuccess: () => vo
 // ── Member Card ──────────────────────────────────────────────────
 function MemberCard({
   member,
-  orgId,
+  projectId,
   myRole,
   isMe,
   onUpdated,
 }: {
   member: User;
-  orgId: string;
-  myRole: OrgRole;
+  projectId: string;
+  myRole: ProjectRole;
   isMe: boolean;
   onUpdated: () => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const memberRole = (member.role ?? "member") as OrgRole;
+  const memberRole = (member.role ?? "member") as ProjectRole;
 
   const canRemove =
     !isMe &&
     (myRole === "owner" ||
       (myRole === "admin" && memberRole === "member"));
 
-  const canChangeRole = myRole === "owner" && !isMe;
+  const canChangeRole = myRole === "owner" && !isMe && memberRole !== "owner";
 
   const handleRemove = async () => {
     setLoading(true);
     try {
-      await graphqlRequest(REMOVE_MUTATION, { orgId, userId: member.id });
+      await graphqlRequest(REMOVE_MUTATION, { projectId, userId: member.id });
       toast.success(`${member.name} removed from project.`);
       onUpdated();
     } catch (e: any) {
@@ -228,7 +231,7 @@ function MemberCard({
   const handleRoleChange = async (newRole: string) => {
     setLoading(true);
     try {
-      await graphqlRequest(UPDATE_ROLE_MUTATION, { orgId, userId: member.id, role: newRole });
+      await graphqlRequest(UPDATE_ROLE_MUTATION, { projectId, userId: member.id, role: newRole });
       toast.success(`${member.name} is now ${newRole}.`);
       onUpdated();
     } catch (e: any) {
@@ -355,7 +358,7 @@ function GenerateJoinCodeCard({ projectId }: { projectId: string }) {
           Temporary Join Passcode (TOTP)
         </h3>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Generate a time-limited passcode allowing anyone to join this project & workspace.
+          Generate a time-limited passcode allowing anyone to join this project.
         </p>
       </div>
 
@@ -404,12 +407,17 @@ function MembersPage() {
   const { users, refetchData } = useTracker();
   const auth = useAuth();
 
-  const orgId = project?.orgId ?? "";
   const myId = auth?.user?.id ?? "";
 
-  // Derive my role from the users list (populated from orgMembers query)
-  const me = users.find((u) => u.id === myId);
-  const myRole: OrgRole = (me?.role as OrgRole) ?? "member";
+  // Members for this specific project (filtered from the store's deduplicated users)
+  const projectMembers = users.filter((u) =>
+    // users in the store come from project-level membership fetches
+    // they all belong to at least one shared project with the current user
+    u.id !== undefined
+  );
+
+  // Derive my role from the project (stored in project.myRole)
+  const myRole: ProjectRole = (project?.myRole as ProjectRole) ?? "member";
 
   const canInvite = myRole === "owner" || myRole === "admin";
 
@@ -429,16 +437,16 @@ function MembersPage() {
           <p className="label-caps">{project.key} · Project Members</p>
           <h1 className="mt-1 font-display text-3xl uppercase">{project.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {users.length} member{users.length !== 1 ? "s" : ""} ·{" "}
+            {projectMembers.length} member{projectMembers.length !== 1 ? "s" : ""} ·{" "}
             <span className="capitalize">{myRole}</span> access
           </p>
         </div>
-        {canInvite && orgId && (
-          <InviteDialog orgId={orgId} onSuccess={refetchData} />
+        {canInvite && (
+          <InviteDialog projectId={projectId} onSuccess={refetchData} />
         )}
       </header>
 
-      {/* TOTP / Passcode Generator Card for Admins/Members */}
+      {/* TOTP / Passcode Generator Card for Admins/Owners */}
       {canInvite && <GenerateJoinCodeCard projectId={projectId} />}
 
       {/* Role legend */}
@@ -459,17 +467,17 @@ function MembersPage() {
 
       {/* Member list */}
       <section className="space-y-3">
-        {users.length === 0 ? (
+        {projectMembers.length === 0 ? (
           <div className="nb p-10 text-center text-muted-foreground">
             <p className="font-display text-lg uppercase">No members yet</p>
             <p className="mt-2 text-sm">Invite teammates to get started.</p>
           </div>
         ) : (
-          users.map((u) => (
+          projectMembers.map((u) => (
             <MemberCard
               key={u.id}
               member={u}
-              orgId={orgId}
+              projectId={projectId}
               myRole={myRole}
               isMe={u.id === myId}
               onUpdated={refetchData}

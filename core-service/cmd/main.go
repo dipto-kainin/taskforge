@@ -33,18 +33,23 @@ func main() {
 		return
 	}
 
-	if os.Getenv("AUTO_MIGRATE") != "false" {
+	if os.Getenv("AUTO_MIGRATE") == "true" {
+		log.Println("AUTO_MIGRATE=true: running migrations...")
 		if err := db.Migrate(database); err != nil {
 			log.Fatalf("Failed to run migrations: %v", err)
 		}
 	} else {
-		log.Println("Skipping migrations (AUTO_MIGRATE=false)")
+		log.Println("Skipping migrations (set AUTO_MIGRATE=true to run, or use: ./taskforge.sh migrate core)")
 	}
 
 	// Get service URLs
 	jwksURL := os.Getenv("JWKS_URL")
 	if jwksURL == "" {
 		jwksURL = "http://localhost:8080/.well-known/jwks.json"
+	}
+	authServiceURL := os.Getenv("AUTH_SERVICE_URL")
+	if authServiceURL == "" {
+		authServiceURL = "http://localhost:8080"
 	}
 	searchServiceURL := os.Getenv("SEARCH_SERVICE_URL")
 	if searchServiceURL == "" {
@@ -67,7 +72,7 @@ func main() {
 	})
 
 	// Initialize handlers
-	h := handlers.New(database, searchServiceURL, gatewayNotifyURL)
+	h := handlers.New(database, authServiceURL, searchServiceURL, gatewayNotifyURL)
 
 	// Auth middleware
 	authMW := middleware.JWKSAuth(jwksURL)
@@ -77,10 +82,16 @@ func main() {
 
 	// Project routes
 	api.POST("/projects", authMW, h.CreateProject)
+	api.GET("/projects", authMW, h.ListProjects)           // user-scoped: returns only projects the caller is a member of
 	api.POST("/projects/join", authMW, h.JoinProject)
 	api.POST("/projects/:id/join-codes", authMW, h.GenerateJoinCode)
-	api.GET("/orgs/:orgId/projects", authMW, h.ListProjects)
 	api.GET("/projects/:id", authMW, h.GetProject)
+
+	// Project member routes
+	api.GET("/projects/:id/members", authMW, h.ListProjectMembers)
+	api.POST("/projects/:id/members", authMW, h.InviteToProject)
+	api.DELETE("/projects/:id/members/:userId", authMW, h.RemoveFromProject)
+	api.PATCH("/projects/:id/members/:userId", authMW, h.UpdateProjectMemberRole)
 
 	// Board routes
 	api.GET("/projects/:id/board", authMW, h.GetBoard)
