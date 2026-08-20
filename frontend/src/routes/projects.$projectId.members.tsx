@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Crown, Shield, User as UserIcon, UserMinus, UserPlus, KeyRound, Copy, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -56,12 +56,23 @@ export const Route = createFileRoute("/projects/$projectId/members")({
   component: MembersPage,
 });
 
-// ── GraphQL mutations ────────────────────────────────────────────
-const GENERATE_JOIN_CODE_MUTATION = `
-  mutation GenerateProjectJoinCode($projectId: ID!, $durationMinutes: Int!) {
-    generateProjectJoinCode(projectId: $projectId, durationMinutes: $durationMinutes) {
+// ── GraphQL queries & mutations ──────────────────────────────────────────────
+const GET_ACTIVE_JOIN_CODE_QUERY = `
+  query GetActiveJoinCode($projectId: ID!) {
+    activeJoinCode(projectId: $projectId) {
       code
       expiresAt
+      alreadyExists
+    }
+  }
+`;
+
+const GENERATE_JOIN_CODE_MUTATION = `
+  mutation GenerateProjectJoinCode($projectId: ID!, $durationMinutes: Int!, $override: Boolean) {
+    generateProjectJoinCode(projectId: $projectId, durationMinutes: $durationMinutes, override: $override) {
+      code
+      expiresAt
+      alreadyExists
     }
   }
 `;
@@ -92,7 +103,7 @@ const UPDATE_ROLE_MUTATION = `
   }
 `;
 
-// ── Role metadata ────────────────────────────────────────────────
+// ── Role metadata ────────────────────────────────────────────────────────────
 const ROLE_META: Record<ProjectRole, { label: string; icon: typeof Crown; color: string }> = {
   owner: { label: "Owner", icon: Crown, color: "bg-urgent text-urgent-foreground" },
   admin: { label: "Admin", icon: Shield, color: "bg-progress text-progress-foreground" },
@@ -112,7 +123,59 @@ function RoleBadge({ role }: { role: ProjectRole }) {
   );
 }
 
-// ── Invite Dialog ────────────────────────────────────────────────
+// ── Skeleton ─────────────────────────────────────────────────────────────────
+function MembersSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-3xl space-y-8 animate-pulse">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="space-y-2">
+          <div className="h-3 w-28 rounded bg-foreground/20" />
+          <div className="h-8 w-56 rounded bg-foreground/30" />
+          <div className="h-3 w-40 rounded bg-foreground/15" />
+        </div>
+        <div className="h-10 w-36 rounded border-2 border-foreground/25 bg-foreground/15" />
+      </header>
+
+      {/* TOTP card skeleton */}
+      <div className="nb space-y-4 p-5 border-foreground/30">
+        <div className="space-y-1.5">
+          <div className="h-5 w-56 rounded bg-foreground/25" />
+          <div className="h-3 w-72 rounded bg-foreground/15" />
+        </div>
+        <div className="flex gap-3">
+          <div className="h-9 w-40 rounded border-2 border-foreground/25 bg-foreground/10" />
+          <div className="h-9 w-36 rounded border-2 border-foreground/25 bg-foreground/15" />
+        </div>
+      </div>
+
+      {/* Role legend skeleton */}
+      <div className="nb-flat flex flex-wrap gap-6 p-4 border-foreground/20">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="h-5 w-20 rounded bg-foreground/20" />
+            <div className="h-3 w-36 rounded bg-foreground/15" />
+          </div>
+        ))}
+      </div>
+
+      {/* Member list skeleton */}
+      <section className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="nb flex items-center gap-4 p-4 border-foreground/25">
+            <div className="size-12 rounded-full bg-foreground/25 border-2 border-foreground/25" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-36 rounded bg-foreground/30" />
+              <div className="h-3 w-48 rounded bg-foreground/15" />
+            </div>
+            <div className="h-5 w-20 rounded bg-foreground/20" />
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+// ── Invite Dialog ────────────────────────────────────────────────────────────
 function InviteDialog({ projectId, onSuccess }: { projectId: string; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -191,7 +254,7 @@ function InviteDialog({ projectId, onSuccess }: { projectId: string; onSuccess: 
   );
 }
 
-// ── Member Card ──────────────────────────────────────────────────
+// ── Member Card ──────────────────────────────────────────────────────────────
 function MemberCard({
   member,
   projectId,
@@ -319,25 +382,117 @@ function MemberCard({
   );
 }
 
+// ── Join Code Card ───────────────────────────────────────────────────────────
 function GenerateJoinCodeCard({ projectId }: { projectId: string }) {
   const [duration, setDuration] = useState("60");
   const [loading, setLoading] = useState(false);
   const [activeCode, setActiveCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  // When the backend reports an active code exists and override=false, we store the
+  // conflict response here and show an AlertDialog asking the user to confirm override.
+  const [conflictCode, setConflictCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(true);
 
-  const handleGenerate = async () => {
+  // Fetch the active code on mount so navigating away and back still shows it.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingExisting(true);
+      try {
+        const res = await graphqlRequest<{
+          activeJoinCode: { code: string | null; expiresAt: string | null; alreadyExists: boolean };
+        }>(GET_ACTIVE_JOIN_CODE_QUERY, { projectId });
+        if (!cancelled && res.activeJoinCode?.alreadyExists && res.activeJoinCode.code && res.activeJoinCode.expiresAt) {
+          const isStillValid = new Date(res.activeJoinCode.expiresAt).getTime() > Date.now();
+          if (isStillValid) {
+            setActiveCode({
+              code: res.activeJoinCode.code,
+              expiresAt: res.activeJoinCode.expiresAt,
+            });
+          } else {
+            setActiveCode(null);
+          }
+        } else if (!cancelled) {
+          setActiveCode(null);
+        }
+      } catch {
+        // Not critical — silently ignore if the query fails (e.g. permission)
+      } finally {
+        if (!cancelled) setLoadingExisting(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  // Auto-clear active code when it expires in real time while user is on the page
+  useEffect(() => {
+    if (!activeCode?.expiresAt) return;
+
+    const expiryMs = new Date(activeCode.expiresAt).getTime() - Date.now();
+    if (expiryMs <= 0) {
+      setActiveCode(null);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setActiveCode(null);
+      toast.info("Join passcode has expired.");
+    }, expiryMs);
+
+    return () => clearTimeout(timer);
+  }, [activeCode]);
+
+  // Auto-close conflict dialog if conflict code expires in real time
+  useEffect(() => {
+    if (!conflictCode?.expiresAt) return;
+
+    const expiryMs = new Date(conflictCode.expiresAt).getTime() - Date.now();
+    if (expiryMs <= 0) {
+      setConflictCode(null);
+      setShowOverrideDialog(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setConflictCode(null);
+      setShowOverrideDialog(false);
+    }, expiryMs);
+
+    return () => clearTimeout(timer);
+  }, [conflictCode]);
+
+  const generate = async (override: boolean) => {
     setLoading(true);
     try {
       const res = await graphqlRequest<{
-        generateProjectJoinCode: { code: string; expiresAt: string };
+        generateProjectJoinCode: { code: string; expiresAt: string; alreadyExists: boolean };
       }>(GENERATE_JOIN_CODE_MUTATION, {
         projectId,
         durationMinutes: parseInt(duration, 10),
+        override,
       });
 
-      setActiveCode(res.generateProjectJoinCode);
-      toast.success(`Join passcode generated: ${res.generateProjectJoinCode.code}`);
+      const result = res.generateProjectJoinCode;
+
+      // Backend returned the existing code without creating a new one (override=false conflict)
+      if (result.alreadyExists && !override) {
+        const isStillValid = result.expiresAt && new Date(result.expiresAt).getTime() > Date.now();
+        if (isStillValid) {
+          setConflictCode({ code: result.code, expiresAt: result.expiresAt });
+          setShowOverrideDialog(true);
+          return;
+        }
+        // If expired according to client time, force generate with override=true
+        return generate(true);
+      }
+
+      // New code was generated (either no existing, or override=true)
+      setActiveCode({ code: result.code, expiresAt: result.expiresAt });
+      setConflictCode(null);
+      setShowOverrideDialog(false);
+      toast.success(`Join passcode generated: ${result.code}`);
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to generate join passcode.");
+      toast.error(e?.message || "Failed to generate join passcode.");
     } finally {
       setLoading(false);
     }
@@ -351,60 +506,168 @@ function GenerateJoinCodeCard({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="nb space-y-4 p-5 bg-card">
-      <div>
-        <h3 className="font-display text-base uppercase flex items-center gap-2">
-          <KeyRound className="size-4 text-primary" />
-          Temporary Join Passcode (TOTP)
-        </h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Generate a time-limited passcode allowing anyone to join this project.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Select value={duration} onValueChange={setDuration}>
-          <SelectTrigger className="w-40 h-9 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="5">5 Minutes</SelectItem>
-            <SelectItem value="60">1 Hour</SelectItem>
-            <SelectItem value="360">6 Hours</SelectItem>
-            <SelectItem value="1440">24 Hours</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Button onClick={handleGenerate} disabled={loading} size="sm" className="nb-sm font-semibold gap-1.5">
-          <Sparkles className="size-3.5" />
-          {loading ? "Generating…" : "Generate Passcode"}
-        </Button>
-      </div>
-
-      {activeCode && (
-        <div className="nb-flat flex items-center justify-between gap-4 p-3 bg-secondary">
-          <div>
-            <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Active Join Passcode</p>
-            <p className="font-mono text-2xl font-black tracking-widest text-primary">{activeCode.code}</p>
-            <p className="text-[0.7rem] text-muted-foreground mt-0.5">
-              Expires at: {new Date(activeCode.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </p>
+    <>
+      {/* Override confirmation dialog */}
+      <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
+        <AlertDialogContent className="sm:max-w-xl p-0 overflow-hidden">
+          {/* Header — no colored background, icon is primary-orange filled block */}
+          <div className="px-6 pt-5 pb-0 flex items-start gap-4">
+            {/* Filled warning icon: primary-orange bg, dark icon */}
+            <div className="shrink-0 size-10 bg-primary border-2 border-foreground flex items-center justify-center rounded-sm">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="size-5 text-foreground"
+                aria-hidden
+              >
+                <path d="M12 2.5L1.5 21h21L12 2.5zm0 3.5 8 14H4L12 6zm-1 5v4h2v-4h-2zm0 6v2h2v-2h-2z" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <AlertDialogTitle className="font-display text-lg uppercase tracking-wide text-foreground leading-tight">
+                Active Passcode Exists
+              </AlertDialogTitle>
+              {conflictCode && (
+                <p className="mt-1 text-sm font-medium text-muted-foreground">
+                  Current code:{" "}
+                  <span className="font-mono font-black tracking-widest text-foreground">
+                    {conflictCode.code}
+                  </span>{" "}
+                  · expires{" "}
+                  {new Date(conflictCode.expiresAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              )}
+            </div>
           </div>
-          <Button onClick={copyCode} variant="outline" size="sm" className="nb-sm gap-1 text-xs">
-            <Copy className="size-3.5" />
-            Copy Code
+
+          {/* Body */}
+          <div className="px-6 pb-5 space-y-4">
+            <AlertDialogDescription asChild>
+              <div className="text-sm text-foreground space-y-3">
+                <p className="text-muted-foreground">
+                  Generating a new passcode will{" "}
+                  <strong className="text-destructive">immediately invalidate</strong> the
+                  current one — anyone who was given the old code will no longer be able to
+                  use it to join.
+                </p>
+
+                <div className="nb-flat bg-secondary p-4 space-y-2">
+                  <p className="label-caps">When you should invalidate</p>
+                  <ul className="space-y-1.5 text-sm text-foreground/80">
+                    <li className="flex items-start gap-2">
+                      <span className="mt-0.5 size-1.5 rounded-full bg-foreground shrink-0 mt-1.5" />
+                      The current code was accidentally shared with the wrong person.
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-0.5 size-1.5 rounded-full bg-foreground shrink-0 mt-1.5" />
+                      You want to set a different expiry duration (e.g. 5 min instead of 1 hour).
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-0.5 size-1.5 rounded-full bg-foreground shrink-0 mt-1.5" />
+                      The invite window has passed and you want to close access immediately.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="nb-flat bg-card p-3 flex items-start gap-2 border-urgent/60">
+                  <span className="text-urgent font-bold text-xs uppercase tracking-wider shrink-0 mt-px">
+                    Note
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    Users who have already joined with the old code keep their access — only
+                    future use of that code is revoked.
+                  </p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          {/* Footer */}
+          <AlertDialogFooter className="px-6 pb-5 gap-2">
+            <AlertDialogCancel
+              onClick={() => setShowOverrideDialog(false)}
+              className="nb-sm font-semibold"
+            >
+              Keep existing code
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => generate(true)}
+              className="nb-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 font-semibold gap-2"
+            >
+              Invalidate & generate new
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
+      <div className="nb space-y-4 p-5 bg-card">
+        <div>
+          <h3 className="font-display text-base uppercase flex items-center gap-2">
+            <KeyRound className="size-4 text-primary" />
+            Temporary Join Passcode (TOTP)
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Generate a time-limited passcode allowing anyone to join this project.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={duration} onValueChange={setDuration}>
+            <SelectTrigger className="w-40 h-9 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="5">5 Minutes</SelectItem>
+              <SelectItem value="60">1 Hour</SelectItem>
+              <SelectItem value="360">6 Hours</SelectItem>
+              <SelectItem value="1440">24 Hours</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button
+            onClick={() => generate(false)}
+            disabled={loading || loadingExisting}
+            size="sm"
+            className="nb-sm font-semibold gap-1.5"
+          >
+            <Sparkles className="size-3.5" />
+            {loading ? "Generating…" : "Generate Passcode"}
           </Button>
         </div>
-      )}
-    </div>
+
+        {loadingExisting && (
+          <div className="animate-pulse h-14 w-full rounded border-2 border-foreground/20 bg-foreground/10" />
+        )}
+
+        {!loadingExisting && activeCode && (
+          <div className="nb-flat flex items-center justify-between gap-4 p-3 bg-secondary">
+            <div>
+              <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted-foreground">Active Join Passcode</p>
+              <p className="font-mono text-2xl font-black tracking-widest text-primary">{activeCode.code}</p>
+              <p className="text-[0.7rem] text-muted-foreground mt-0.5">
+                Expires at: {new Date(activeCode.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+            <Button onClick={copyCode} variant="outline" size="sm" className="nb-sm gap-1 text-xs">
+              <Copy className="size-3.5" />
+              Copy Code
+            </Button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────
+// ── Page ─────────────────────────────────────────────────────────────────────
 function MembersPage() {
   const { projectId } = Route.useParams() as { projectId: string };
   const project = useProject(projectId);
-  const { users, refetchData } = useTracker();
+  const { ready, users, refetchData } = useTracker();
   const auth = useAuth();
 
   const myId = auth?.user?.id ?? "";
@@ -420,6 +683,10 @@ function MembersPage() {
   const myRole: ProjectRole = (project?.myRole as ProjectRole) ?? "member";
 
   const canInvite = myRole === "owner" || myRole === "admin";
+
+  if (!ready) {
+    return <MembersSkeleton />;
+  }
 
   if (!project) {
     return (

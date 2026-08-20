@@ -8,6 +8,8 @@ type Query {
   sprints(projectId: ID!): [Sprint!]!
   labels(projectId: ID!): [Label!]!
   search(query: String!, projectId: String): [SearchResult!]!
+  dashboard: DashboardData!
+  activeJoinCode(projectId: ID!): ActiveJoinCode
 }
 
 type Mutation {
@@ -17,7 +19,7 @@ type Mutation {
 
   createProject(input: CreateProjectInput!): Project!
   joinProjectWithCode(code: String!): Project!
-  generateProjectJoinCode(projectId: ID!, durationMinutes: Int!): ProjectJoinCode!
+  generateProjectJoinCode(projectId: ID!, durationMinutes: Int!, override: Boolean): ActiveJoinCode!
   createSprint(projectId: ID!, input: CreateSprintInput!): Sprint!
   updateSprint(id: ID!, status: String!): Sprint!
 
@@ -248,4 +250,24 @@ type SummaryResult {
 type ProjectJoinCode {
   code: String!
   expiresAt: String!
+}
+
+# Richer join code type used for dashboard queries and active-code lookups.
+type ActiveJoinCode {
+  code: String
+  expiresAt: String
+  alreadyExists: Boolean!
+}
+
+# ---- Dashboard Types ----
+
+type DashboardProjectMembers {
+  projectId: ID!
+  members: [ProjectMember!]!
+}
+
+type DashboardData {
+  projects: [Project!]!
+  tickets: [Issue!]!
+  membersByProject: [DashboardProjectMembers!]!
 }

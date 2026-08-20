@@ -80,11 +80,15 @@ func main() {
 	// API routes
 	api := app.Group("/api")
 
+	// Dashboard — single aggregated endpoint (projects + tickets + members)
+	api.GET("/dashboard", authMW, h.GetDashboard)
+
 	// Project routes
 	api.POST("/projects", authMW, h.CreateProject)
 	api.GET("/projects", authMW, h.ListProjects)           // user-scoped: returns only projects the caller is a member of
 	api.POST("/projects/join", authMW, h.JoinProject)
 	api.POST("/projects/:id/join-codes", authMW, h.GenerateJoinCode)
+	api.GET("/projects/:id/join-codes/active", authMW, h.GetActiveJoinCode)
 	api.GET("/projects/:id", authMW, h.GetProject)
 
 	// Project member routes

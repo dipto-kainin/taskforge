@@ -53,6 +53,46 @@ export const Route = createFileRoute("/projects/$projectId/issues")({
   component: IssuesPage,
 });
 
+function IssuesSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-8 animate-pulse">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-2">
+          <div className="h-3 w-24 rounded bg-foreground/20" />
+          <div className="h-8 w-40 rounded bg-foreground/30" />
+        </div>
+        <div className="h-9 w-24 rounded border-2 border-foreground/25 bg-foreground/15" />
+      </header>
+
+      {/* Filter bar skeleton */}
+      <div className="nb flex flex-wrap items-center gap-3 p-4 border-foreground/30">
+        <div className="h-9 w-64 rounded border-2 border-foreground/25 bg-foreground/10" />
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-9 w-36 rounded border-2 border-foreground/25 bg-foreground/10" />
+        ))}
+      </div>
+
+      {/* Table skeleton */}
+      <div className="nb overflow-hidden border-foreground/30">
+        <div className="border-b-2 border-foreground/20 bg-muted/30 flex gap-4 px-4 py-3">
+          {["w-20", "flex-1", "w-28", "w-24", "w-14"].map((w, i) => (
+            <div key={i} className={`h-3 ${w} rounded bg-foreground/20`} />
+          ))}
+        </div>
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="flex gap-4 border-b border-foreground/10 px-4 py-4 items-center">
+            <div className="h-3 w-20 rounded bg-foreground/15" />
+            <div className="h-4 flex-1 rounded bg-foreground/25" />
+            <div className="h-6 w-24 rounded-full bg-foreground/20" />
+            <div className="h-5 w-20 rounded bg-foreground/20" />
+            <div className="size-6 rounded-full bg-foreground/20 ml-auto" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const priorityRank: Record<Priority, number> = {
   urgent: 0,
   high: 1,
@@ -65,8 +105,12 @@ function IssuesPage() {
   const { projectId } = Route.useParams();
   const { q, status, priority, assignee, sort } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
+  const { ready, tickets, users } = useTracker();
   const project = useProject(projectId);
-  const { tickets, users } = useTracker();
+
+  if (!ready) {
+    return <IssuesSkeleton />;
+  }
 
   if (!project) {
     return (

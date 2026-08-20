@@ -86,6 +86,13 @@ export class ProxyService {
     return data;
   }
 
+  async getDashboard(context: any) {
+    const { data } = await axios.get(`${this.coreUrl}/api/dashboard`, {
+      headers: this.getHeaders(context),
+    });
+    return data;
+  }
+
   async getProject(id: string, context: any) {
     const { data } = await axios.get(`${this.coreUrl}/api/projects/${id}`, {
       headers: this.getHeaders(context),
@@ -102,16 +109,37 @@ export class ProxyService {
     return data;
   }
 
-  async generateProjectJoinCode(projectId: string, durationMinutes: number, context: any) {
+  async generateProjectJoinCode(projectId: string, durationMinutes: number, override: boolean, context: any) {
     const { data } = await axios.post(
       `${this.coreUrl}/api/projects/${projectId}/join-codes`,
-      { duration_minutes: durationMinutes },
+      { duration_minutes: durationMinutes, override },
       { headers: this.getHeaders(context) },
     );
     return {
-      code: data.code,
-      expiresAt: data.expires_at,
+      code: data.code ?? null,
+      expiresAt: data.expires_at ?? null,
+      alreadyExists: data.already_exists ?? false,
     };
+  }
+
+  async getActiveJoinCode(projectId: string, context: any) {
+    try {
+      const { data } = await axios.get(
+        `${this.coreUrl}/api/projects/${projectId}/join-codes/active`,
+        { headers: this.getHeaders(context) },
+      );
+      return {
+        code: data.code ?? null,
+        expiresAt: data.expires_at ?? null,
+        alreadyExists: data.already_exists ?? false,
+      };
+    } catch (e: any) {
+      // 404 = no active code, not an error
+      if (e?.response?.status === 404) {
+        return { code: null, expiresAt: null, alreadyExists: false };
+      }
+      throw e;
+    }
   }
 
   async joinProjectWithCode(code: string, context: any) {

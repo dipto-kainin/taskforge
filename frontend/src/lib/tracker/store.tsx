@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -36,52 +37,48 @@ interface TrackerContextValue extends TrackerData {
 
 const TrackerContext = createContext<TrackerContextValue | null>(null);
 
-const GET_MY_PROJECTS_QUERY = `
-  query GetMyProjects {
-    myProjects {
-      id
-      key
-      name
-      description
-      myRole
-    }
-  }
-`;
-
-const GET_PROJECT_MEMBERS_QUERY = `
-  query GetProjectMembers($projectId: ID!) {
-    projectMembers(projectId: $projectId) {
-      id
-      name
-      email
-      avatarUrl
-      role
-    }
-  }
-`;
-
-const GET_BOARD_QUERY = `
-  query GetBoard($projectId: ID!) {
-    board(projectId: $projectId) {
-      id
-      name
-      columns {
+// ── Single dashboard query ─────────────────────────────────────────────────────
+// Replaces the previous 1 + N + N waterfall (myProjects + members/project + board/project).
+// The gateway aggregates all data server-side; the frontend gets projects, tickets,
+// and members in one round-trip.
+const GET_DASHBOARD_QUERY = `
+  query GetDashboard {
+    dashboard {
+      projects {
         id
+        key
         name
-        position
-        issues {
+        description
+        myRole
+      }
+      tickets {
+        id
+        projectId
+        key
+        title
+        description
+        type
+        status
+        priority
+        assigneeId
+        columnId
+        storyPoints
+        createdAt
+        updatedAt
+        labels {
           id
-          key
-          title
-          description
-          type
-          status
-          priority
-          assigneeId
-          columnId
-          storyPoints
-          createdAt
-          updatedAt
+          name
+          color
+        }
+      }
+      membersByProject {
+        projectId
+        members {
+          id
+          name
+          email
+          avatarUrl
+          role
         }
       }
     }
@@ -155,21 +152,70 @@ function normalizePriority(pStr: string): Priority {
   return "lowest";
 }
 
+/**
+ * Shallow equality check on TrackerData to avoid unnecessary re-renders.
+ * Compares project/ticket/user counts and first-item IDs as a quick heuristic.
+ */
+function shallowDataEqual(a: TrackerData, b: TrackerData): boolean {
+  if (a.projects.length !== b.projects.length) return false;
+  if (a.tickets.length !== b.tickets.length) return false;
+  if (a.users.length !== b.users.length) return false;
+  // Quick spot-check: compare first project ID and first ticket ID
+  if (a.projects[0]?.id !== b.projects[0]?.id) return false;
+  if (a.tickets[0]?.id !== b.tickets[0]?.id) return false;
+  return true;
+}
+
 export function TrackerProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const isAuthenticated = auth?.isAuthenticated ?? false;
   const [data, setData] = useState<TrackerData>(EMPTY_DATA);
   const [ready, setReady] = useState(false);
 
+  // Track whether this is the very first fetch. On first fetch we keep ready=false
+  // (shows skeleton). On subsequent re-fetches we keep ready=true so existing
+  // data stays visible while fresh data loads in background.
+  const hasLoadedOnce = useRef(false);
+
   const refetchData = useCallback(async () => {
     if (!isAuthenticated) return;
-    try {
-      // 1. Fetch all projects the current user belongs to (project-level membership)
-      const projData = await graphqlRequest<{
-        myProjects: { id: string; key: string; name: string; description?: string; myRole?: string }[];
-      }>(GET_MY_PROJECTS_QUERY);
 
-      const fetchedProjects: Project[] = (projData.myProjects || []).map((p) => ({
+    // Only reset ready on the very first load — never blank the UI on re-fetches.
+    if (!hasLoadedOnce.current) {
+      setReady(false);
+    }
+
+    try {
+      const result = await graphqlRequest<{
+        dashboard: {
+          projects: { id: string; key: string; name: string; description?: string; myRole?: string }[];
+          tickets: {
+            id: string;
+            projectId: string;
+            key: string;
+            title: string;
+            description?: string;
+            type?: string;
+            status: string;
+            priority: string;
+            assigneeId?: string | null;
+            columnId?: string | null;
+            storyPoints?: number | null;
+            createdAt?: string;
+            updatedAt?: string;
+            labels?: { id: string; name: string; color: string }[];
+          }[];
+          membersByProject: {
+            projectId: string;
+            members: { id: string; name: string; email: string; avatarUrl?: string; role: string }[];
+          }[];
+        };
+      }>(GET_DASHBOARD_QUERY);
+
+      const dashboard = result.dashboard;
+
+      // ── Map projects ──────────────────────────────────────────────────────
+      const fetchedProjects: Project[] = (dashboard.projects || []).map((p) => ({
         id: p.id,
         key: p.key,
         name: p.name,
@@ -178,102 +224,72 @@ export function TrackerProvider({ children }: { children: ReactNode }) {
         myRole: (p.myRole as ProjectRole) || "member",
       }));
 
-      // 2. Fetch members for each project and deduplicate by user ID (for assignee picker)
-      const userMap = new Map<string, User>();
-      for (const proj of fetchedProjects) {
-        try {
-          const membersRes = await graphqlRequest<{
-            projectMembers: { id: string; name: string; email: string; avatarUrl?: string; role: string }[];
-          }>(GET_PROJECT_MEMBERS_QUERY, { projectId: proj.id });
+      // ── Map tickets ───────────────────────────────────────────────────────
+      const fetchedTickets: Ticket[] = (dashboard.tickets || []).map((t) => ({
+        id: t.id,
+        projectId: t.projectId,
+        key: t.key,
+        title: t.title,
+        description: t.description || "",
+        status: normalizeStatus(t.status),
+        priority: normalizePriority(t.priority),
+        assigneeId: t.assigneeId || null,
+        labels: (t.labels || []).map((l) => l.name),
+        order: 0,
+        createdAt: t.createdAt || new Date().toISOString(),
+        updatedAt: t.updatedAt || new Date().toISOString(),
+      }));
 
-          for (const m of membersRes.projectMembers || []) {
-            if (!userMap.has(m.id)) {
-              userMap.set(m.id, {
-                id: m.id,
-                name: m.name,
-                email: m.email,
-                avatarUrl: m.avatarUrl ?? null,
-                initials: m.name
-                  .split(" ")
-                  .map((w) => w[0])
-                  .join("")
-                  .toUpperCase()
-                  .slice(0, 2),
-                role: m.role as ProjectRole,
-              });
-            }
+      // ── Deduplicate users across all projects ─────────────────────────────
+      const userMap = new Map<string, User>();
+      for (const entry of dashboard.membersByProject || []) {
+        for (const m of entry.members || []) {
+          if (!userMap.has(m.id)) {
+            userMap.set(m.id, {
+              id: m.id,
+              name: m.name,
+              email: m.email,
+              avatarUrl: m.avatarUrl ?? null,
+              initials: m.name
+                .split(" ")
+                .map((w) => w[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2),
+              role: m.role as ProjectRole,
+            });
           }
-        } catch {
-          /* skip if members fetch fails for this project */
         }
       }
       const fetchedUsers = Array.from(userMap.values());
 
-      if (fetchedProjects.length === 0) {
-        setData({ projects: [], tickets: [], users: fetchedUsers, comments: [] });
-        return;
-      }
-
-      // 3. Fetch board issues for each project
-      let allTickets: Ticket[] = [];
-      for (const proj of fetchedProjects) {
-        try {
-          const boardRes = await graphqlRequest<{
-            board: {
-              columns: {
-                id: string;
-                name: string;
-                issues: any[];
-              }[];
-            };
-          }>(GET_BOARD_QUERY, { projectId: proj.id });
-
-          if (boardRes.board && boardRes.board.columns) {
-            for (const col of boardRes.board.columns) {
-              for (const iss of col.issues || []) {
-                allTickets.push({
-                  id: iss.id,
-                  projectId: proj.id,
-                  key: iss.key,
-                  title: iss.title,
-                  description: iss.description || "",
-                  status: normalizeStatus(iss.status),
-                  priority: normalizePriority(iss.priority),
-                  assigneeId: iss.assigneeId || null,
-                  labels: (iss.labels || []).map((l: any) => l.name || l),
-                  order: 0,
-                  createdAt: iss.createdAt || new Date().toISOString(),
-                  updatedAt: iss.updatedAt || new Date().toISOString(),
-                });
-              }
-            }
-          }
-        } catch {
-          /* skip unreachable project */
-        }
-      }
-
-      setData({
+      const newData: TrackerData = {
         projects: fetchedProjects,
-        tickets: allTickets,
+        tickets: fetchedTickets,
         users: fetchedUsers,
         comments: [],
-      });
+      };
+
+      // Only call setData if data actually changed to avoid unnecessary re-renders.
+      setData((prev) => (shallowDataEqual(prev, newData) ? prev : newData));
     } catch (e: any) {
-      console.error("Failed to fetch data from backend", e);
+      console.error("Failed to fetch dashboard data from backend", e);
       if (e?.message?.includes("401") || e?.message?.includes("Unauthorized") || e?.message?.includes("403")) {
         auth?.logout();
       }
     } finally {
+      hasLoadedOnce.current = true;
       setReady(true);
     }
   }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      setReady(false);
       refetchData();
     } else {
+      // Reset on logout
+      hasLoadedOnce.current = false;
+      setData(EMPTY_DATA);
       setReady(true);
     }
   }, [isAuthenticated, refetchData]);

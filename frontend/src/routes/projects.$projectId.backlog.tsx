@@ -28,10 +28,40 @@ export const Route = createFileRoute("/projects/$projectId/backlog")({
 
 const rank: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3, lowest: 4 };
 
+function BacklogSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-8 animate-pulse">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-2">
+          <div className="h-3 w-24 rounded bg-foreground/20" />
+          <div className="h-8 w-48 rounded bg-foreground/30" />
+          <div className="h-3 w-40 rounded bg-foreground/15" />
+        </div>
+        <div className="h-9 w-24 rounded border-2 border-foreground/25 bg-foreground/15" />
+      </header>
+      <ul className="space-y-4">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <li key={i} className="nb flex flex-wrap items-center gap-4 p-5 border-foreground/30">
+            <div className="h-3 w-16 rounded bg-foreground/20" />
+            <div className="h-5 flex-1 rounded bg-foreground/30" />
+            <div className="h-5 w-16 rounded-full bg-foreground/20" />
+            <div className="size-7 rounded-full bg-foreground/25" />
+            <div className="h-8 w-20 rounded border-2 border-foreground/25 bg-foreground/15" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function BacklogPage() {
   const { projectId } = Route.useParams();
+  const { ready, tickets, updateTicket } = useTracker();
   const project = useProject(projectId);
-  const { tickets, updateTicket } = useTracker();
+
+  if (!ready) {
+    return <BacklogSkeleton />;
+  }
 
   if (!project) {
     return (

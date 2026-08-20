@@ -50,17 +50,80 @@ export const Route = createFileRoute("/projects/$projectId/tickets/$ticketId")({
   component: TicketPage,
 });
 
+function TicketDetailSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-6 animate-pulse">
+      {/* Top bar: back button + delete */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="h-8 w-32 rounded border-2 border-foreground/25 bg-foreground/15" />
+        <div className="h-8 w-28 rounded border-2 border-foreground/25 bg-foreground/15" />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_16rem]">
+        {/* Left: main content */}
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <div className="h-3 w-16 rounded bg-foreground/15" />
+            <div className="h-8 w-3/4 rounded bg-foreground/30" />
+          </div>
+
+          <section className="space-y-2">
+            <div className="h-3 w-24 rounded bg-foreground/20" />
+            <div className="h-28 w-full rounded border-2 border-foreground/20 bg-foreground/10" />
+          </section>
+
+          <section className="space-y-3">
+            <div className="h-3 w-28 rounded bg-foreground/20" />
+            {[1, 2].map((i) => (
+              <div key={i} className="flex gap-3 rounded border-2 border-foreground/15 p-3">
+                <div className="size-8 rounded-full bg-foreground/20 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-32 rounded bg-foreground/25" />
+                  <div className="h-3 w-3/4 rounded bg-foreground/15" />
+                </div>
+              </div>
+            ))}
+          </section>
+        </div>
+
+        {/* Right: sidebar */}
+        <aside className="space-y-4 rounded border-2 border-foreground/20 bg-surface/30 p-4">
+          {["Status", "Priority", "Assignee", "Tags"].map((label) => (
+            <div key={label} className="space-y-1.5">
+              <div className="h-3 w-16 rounded bg-foreground/20" />
+              <div className="h-9 w-full rounded border-2 border-foreground/20 bg-foreground/10" />
+            </div>
+          ))}
+          <div className="space-y-1 border-t border-foreground/15 pt-3">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex justify-between">
+                <div className="h-3 w-14 rounded bg-foreground/15" />
+                <div className="h-3 w-20 rounded bg-foreground/20" />
+              </div>
+            ))}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 function TicketPage() {
   const { projectId, ticketId } = Route.useParams();
   const navigate = useNavigate();
   const project = useProject(projectId);
-  const { tickets, comments, users, updateTicket, deleteTicket, addComment } = useTracker();
+  const { ready, tickets, comments, users, updateTicket, deleteTicket, addComment } = useTracker();
   const auth = useAuth();
   const ticket = tickets.find((t) => t.id === ticketId) ?? null;
 
   const [draft, setDraft] = useState("");
   const [labelDraft, setLabelDraft] = useState("");
   const [editingLabels, setEditingLabels] = useState(false);
+
+  // While data is loading show skeleton — never flash "Issue not found"
+  if (!ready) {
+    return <TicketDetailSkeleton />;
+  }
 
   if (!ticket || !project) {
     return (

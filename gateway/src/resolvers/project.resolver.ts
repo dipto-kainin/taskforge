@@ -62,6 +62,40 @@ export class ProjectResolver {
     return this.proxy.getLabels(projectId, context);
   }
 
+  @Query()
+  async dashboard(@Context() context: any) {
+    const data = await this.proxy.getDashboard(context);
+
+    const projects = (data.projects || []).map((p: any) => ({
+      id: p.id,
+      key: p.key,
+      name: p.name,
+      description: p.description,
+      createdAt: p.created_at,
+      myRole: p.my_role,
+    }));
+
+    const tickets = (data.tickets || []).map((t: any) => mapIssue(t));
+
+    const membersByProject = (data.members || []).map((entry: any) => ({
+      projectId: entry.project_id,
+      members: (entry.members || []).map((m: any) => ({
+        id: m.id,
+        name: m.name || '',
+        email: m.email || '',
+        avatarUrl: m.avatar_url || null,
+        role: m.role,
+      })),
+    }));
+
+    return { projects, tickets, membersByProject };
+  }
+
+  @Query()
+  async activeJoinCode(@Args('projectId') projectId: string, @Context() context: any) {
+    return this.proxy.getActiveJoinCode(projectId, context);
+  }
+
   @Mutation()
   async createProject(@Args('input') input: any, @Context() context: any) {
     const p = await this.proxy.createProject(input, context);
@@ -77,9 +111,10 @@ export class ProjectResolver {
   async generateProjectJoinCode(
     @Args('projectId') projectId: string,
     @Args('durationMinutes') durationMinutes: number,
+    @Args('override') override: boolean,
     @Context() context: any,
   ) {
-    return this.proxy.generateProjectJoinCode(projectId, durationMinutes, context);
+    return this.proxy.generateProjectJoinCode(projectId, durationMinutes, override ?? false, context);
   }
 
   @Mutation()
