@@ -208,3 +208,39 @@ func (h *Handler) JoinProject(c *kai.Context) {
 		"id": projectID, "key": key, "name": name, "description": desc,
 	})
 }
+
+// JoinProjectByID allows an authenticated user with an invite link to join a project by project ID.
+func (h *Handler) JoinProjectByID(c *kai.Context) {
+	projectID := c.Param("id")
+	userID := getUserID(c)
+
+	if userID == "" {
+		c.JSON(401, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var key, name, desc string
+	err := h.db.QueryRow(
+		`SELECT key, name, description FROM core.projects WHERE id = $1`, projectID,
+	).Scan(&key, &name, &desc)
+
+	if err != nil {
+		c.JSON(404, map[string]string{"error": "project not found"})
+		return
+	}
+
+	_, err = h.db.Exec(
+		`INSERT INTO core.project_members (project_id, user_id, role)
+		 VALUES ($1, $2, 'member')
+		 ON CONFLICT (project_id, user_id) DO NOTHING`,
+		projectID, userID,
+	)
+	if err != nil {
+		c.JSON(500, map[string]string{"error": "failed to join project"})
+		return
+	}
+
+	c.JSON(200, map[string]interface{}{
+		"id": projectID, "key": key, "name": name, "description": desc,
+	})
+}

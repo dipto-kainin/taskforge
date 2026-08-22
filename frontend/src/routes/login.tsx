@@ -1,12 +1,22 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { zodValidator } from "@tanstack/zod-adapter";
+import { z } from "zod";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { graphqlRequest } from "@/lib/graphql-client";
 import { toast } from "sonner";
-import { ArrowRight, Lock, Mail, User, ShieldCheck, Loader2 } from "lucide-react";
+import { ArrowRight, Lock, Mail, User, Loader2 } from "lucide-react";
 import { BlockWorkLogo } from "@/components/tracker/logo";
 import { useServiceHealth, ServiceStatusWidget } from "@/components/tracker/service-status-widget";
 
+const loginSearchSchema = z.object({
+  invite: z.union([z.string(), z.number()]).optional(),
+  email: z.string().optional(),
+  token: z.string().optional(),
+});
+
 export const Route = createFileRoute("/login")({
+  validateSearch: zodValidator(loginSearchSchema),
   head: () => ({
     meta: [
       { title: "Login — Blockwork" },
@@ -18,7 +28,8 @@ export const Route = createFileRoute("/login")({
 
 function LoginComponent() {
   const { login, register, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
+  const searchParams = Route.useSearch();
+  const inviteProcessedRef = useRef(false);
 
   const { health, loading: healthLoading, refetch: refetchHealth } = useServiceHealth();
 
@@ -30,11 +41,59 @@ function LoginComponent() {
 
   const allHealthy = health?.allHealthy ?? false;
 
+  // Pre-fill email & mode from invite link params
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate({ to: "/" });
+    if (searchParams.email) {
+      setEmail(searchParams.email);
     }
-  }, [isAuthenticated, navigate]);
+    if (searchParams.invite !== undefined && String(searchParams.invite) === "1") {
+      setIsRegisterMode(true);
+    }
+  }, [searchParams.email, searchParams.invite]);
+
+  // Execute JWT temporal invite flow
+  const processInviteFlow = async () => {
+    if (inviteProcessedRef.current) return;
+    inviteProcessedRef.current = true;
+
+    if (!searchParams.token) {
+      toast.error("Adding to project failed: missing invite token");
+      window.location.href = "/";
+      return;
+    }
+
+    try {
+      const data = await graphqlRequest<{ joinProjectWithInvite: { id: string; name: string } }>(
+        `mutation JoinProjectWithInvite($token: String!) {
+          joinProjectWithInvite(token: $token) {
+            id
+            name
+          }
+        }`,
+        { token: searchParams.token }
+      );
+
+      toast.success("Joined project successfully!");
+      // Full location reload to board to clear query parameters & re-fetch fresh dashboard data
+      window.location.href = `/projects/${data.joinProjectWithInvite.id}/board`;
+    } catch (err: any) {
+      // Failure case: error toast, DO NOT send any project ID, redirect to home and strip query params
+      toast.error(`Adding to project failed: ${err?.message || "invalid or expired link"}`);
+      window.location.href = "/";
+    }
+  };
+
+  // If already authenticated when page opens, execute invite flow ONCE or redirect home
+  useEffect(() => {
+    if (isAuthenticated && !inviteProcessedRef.current) {
+      if (searchParams.token) {
+        processInviteFlow();
+      } else {
+        inviteProcessedRef.current = true;
+        window.location.href = "/";
+      }
+    }
+  }, [isAuthenticated, searchParams.token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,10 +116,15 @@ function LoginComponent() {
         await login(email, password);
         toast.success("Logged in successfully!");
       }
-      navigate({ to: "/" });
+
+      if (searchParams.token) {
+        await processInviteFlow();
+      } else {
+        inviteProcessedRef.current = true;
+        window.location.href = "/";
+      }
     } catch (err: any) {
       toast.error(err.message || "Authentication failed.");
-    } finally {
       setLoading(false);
     }
   };

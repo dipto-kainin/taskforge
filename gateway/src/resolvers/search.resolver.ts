@@ -9,9 +9,10 @@ export class SearchResolver {
   async search(
     @Args('query') query: string,
     @Args('projectId') projectId: string,
+    @Args('useAI') useAI: boolean,
     @Context() context: any,
   ) {
-    const results = await this.proxy.search(query, projectId, context);
+    const results = await this.proxy.search(query, projectId, useAI ?? false, context);
     return results.map((r: any) => ({
       issueId: r.issue_id,
       projectId: r.project_id,
@@ -48,11 +49,38 @@ export class SearchResolver {
   async summarizeComments(
     @Args('issueId') issueId: string,
     @Args('comments') comments: any[],
+    @Context() context: any,
   ) {
-    const result = await this.proxy.summarizeComments(issueId, comments);
+    const result = await this.proxy.summarizeComments(issueId, comments, context);
     return {
       summary: result.summary,
       commentCount: result.comment_count,
     };
+  }
+
+  @Query()
+  async projectHasAiKey(
+    @Args('projectId') projectId: string,
+    @Context() context: any,
+  ) {
+    return this.proxy.projectHasAiKey(projectId, context);
+  }
+
+  @Mutation()
+  async setProjectApiKey(
+    @Args('projectId') projectId: string,
+    @Args('provider') provider: string,
+    @Args('apiKey') apiKey: string,
+    @Context() context: any,
+  ) {
+    return this.proxy.setProjectApiKey(projectId, provider, apiKey, context);
+  }
+
+  @Mutation()
+  async removeProjectApiKey(
+    @Args('projectId') projectId: string,
+    @Context() context: any,
+  ) {
+    return this.proxy.removeProjectApiKey(projectId, context);
   }
 }

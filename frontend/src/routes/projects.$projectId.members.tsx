@@ -103,6 +103,24 @@ const UPDATE_ROLE_MUTATION = `
   }
 `;
 
+const SET_API_KEY_MUTATION = `
+  mutation SetProjectApiKey($projectId: ID!, $provider: String!, $apiKey: String!) {
+    setProjectApiKey(projectId: $projectId, provider: $provider, apiKey: $apiKey)
+  }
+`;
+
+const REMOVE_API_KEY_MUTATION = `
+  mutation RemoveProjectApiKey($projectId: ID!) {
+    removeProjectApiKey(projectId: $projectId)
+  }
+`;
+
+const PROJECT_HAS_AI_KEY_QUERY = `
+  query ProjectHasAiKey($projectId: ID!) {
+    projectHasAiKey(projectId: $projectId)
+  }
+`;
+
 // ── Role metadata ────────────────────────────────────────────────────────────
 const ROLE_META: Record<ProjectRole, { label: string; icon: typeof Crown; color: string }> = {
   owner: { label: "Owner", icon: Crown, color: "bg-urgent text-urgent-foreground" },
@@ -663,7 +681,182 @@ function GenerateJoinCodeCard({ projectId }: { projectId: string }) {
   );
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+// ── AI Configuration Card ─────────────────────────────────────────────────────
+const AI_PROVIDERS = [
+  { value: "openai",    label: "OpenAI",         hint: "GPT-4o-mini + text-embedding-3-small" },
+  { value: "anthropic", label: "Anthropic",       hint: "Claude 3 Haiku" },
+  { value: "google",   label: "Google Gemini",   hint: "Gemini 1.5 Flash + text-embedding-004" },
+] as const;
+
+function AIConfigCard({ projectId }: { projectId: string }) {
+  const [provider, setProvider] = useState("openai");
+  const [apiKey, setApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [hasKey, setHasKey] = useState<boolean | null>(null);
+
+  // Check if key is already set on mount
+  useEffect(() => {
+    graphqlRequest<{ projectHasAiKey: boolean }>(PROJECT_HAS_AI_KEY_QUERY, { projectId })
+      .then((r) => setHasKey(r.projectHasAiKey))
+      .catch(() => setHasKey(false));
+  }, [projectId]);
+
+  const handleSave = async () => {
+    if (!apiKey.trim()) { toast.error("Enter an API key."); return; }
+    setSaving(true);
+    try {
+      await graphqlRequest(SET_API_KEY_MUTATION, { projectId, provider, apiKey: apiKey.trim() });
+      toast.success("AI API key saved. All project members can now use AI search.");
+      setApiKey("");
+      setHasKey(true);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save API key.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setRemoving(true);
+    try {
+      await graphqlRequest(REMOVE_API_KEY_MUTATION, { projectId });
+      toast.success("AI API key removed.");
+      setHasKey(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to remove API key.");
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const selectedProvider = AI_PROVIDERS.find((p) => p.value === provider);
+
+  return (
+    <div className="nb space-y-4 p-5 bg-card">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-display text-base uppercase flex items-center gap-2">
+            <Sparkles className="size-4 text-primary" />
+            AI Search Configuration
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Add an LLM API key to enable AI-enhanced search for all project members.
+            Keys are encrypted before storage and never returned to clients.
+          </p>
+        </div>
+        {hasKey === true && (
+          <span className="shrink-0 inline-flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-green-400 border border-green-500/40 bg-green-500/10 px-2 py-0.5 rounded-full">
+            <span className="size-1.5 rounded-full bg-green-400 animate-pulse" />
+            Key Configured
+          </span>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 items-start">
+        {/* Provider */}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ai-provider" className="font-semibold text-sm">LLM Provider</Label>
+          <Select value={provider} onValueChange={setProvider}>
+            <SelectTrigger id="ai-provider" className="h-10 w-full border-2 border-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AI_PROVIDERS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[0.7rem] text-muted-foreground min-h-[1.25rem]">
+            {selectedProvider?.hint ?? ""}
+          </p>
+        </div>
+
+        {/* API Key */}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ai-api-key" className="font-semibold text-sm">API Key</Label>
+          <div className="relative w-full">
+            <Input
+              id="ai-api-key"
+              type={showKey ? "text" : "password"}
+              placeholder={hasKey ? "Enter new key to replace…" : "sk-…"}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSave()}
+              className="h-10 border-2 border-foreground pr-10"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((v) => !v)}
+              className="absolute right-2.5 top-0 bottom-0 my-auto h-6 w-6 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showKey ? "Hide key" : "Show key"}
+            >
+              {showKey ? (
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+              ) : (
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+              )}
+            </button>
+          </div>
+          <p className="text-[0.7rem] text-muted-foreground min-h-[1.25rem]">
+            Encrypted with AES-256-GCM before storage
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          id="ai-save-key-btn"
+          size="sm"
+          onClick={handleSave}
+          disabled={saving}
+          className="nb-sm font-semibold gap-1.5"
+        >
+          <Sparkles className="size-3.5" />
+          {saving ? "Saving…" : hasKey ? "Update Key" : "Save Key"}
+        </Button>
+
+        {hasKey && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                id="ai-remove-key-btn"
+                size="sm"
+                variant="ghost"
+                disabled={removing}
+                className="nb-sm font-semibold gap-1.5 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              >
+                {removing ? "Removing…" : "Remove Key"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="font-display uppercase">Remove AI Key?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will delete the encrypted API key. AI search features will be disabled
+                  for this project until a new key is configured.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleRemove}
+                  className="bg-destructive text-destructive-foreground"
+                >
+                  Remove
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+    </div>
+  );
+}
 function MembersPage() {
   const { projectId } = Route.useParams() as { projectId: string };
   const project = useProject(projectId);
@@ -715,6 +908,9 @@ function MembersPage() {
 
       {/* TOTP / Passcode Generator Card for Admins/Owners */}
       {canInvite && <GenerateJoinCodeCard projectId={projectId} />}
+
+      {/* AI Configuration Card for Admins/Owners */}
+      {canInvite && <AIConfigCard projectId={projectId} />}
 
       {/* Role legend */}
       <div className="nb-flat flex flex-wrap gap-6 p-4">

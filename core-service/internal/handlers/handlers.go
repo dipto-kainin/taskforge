@@ -29,15 +29,17 @@ type Handler struct {
 	authServiceURL   string
 	searchServiceURL string
 	gatewayNotifyURL string
+	mailServiceURL   string
 }
 
 // New creates a Handler with all required dependencies.
-func New(db *sql.DB, authServiceURL, searchServiceURL, gatewayNotifyURL string) *Handler {
+func New(db *sql.DB, authServiceURL, searchServiceURL, gatewayNotifyURL, mailServiceURL string) *Handler {
 	return &Handler{
 		db:               db,
 		authServiceURL:   authServiceURL,
 		searchServiceURL: searchServiceURL,
 		gatewayNotifyURL: gatewayNotifyURL,
+		mailServiceURL:   mailServiceURL,
 	}
 }
 
@@ -110,7 +112,7 @@ func (h *Handler) fetchUserByEmail(email string) (map[string]interface{}, error)
 	return user, nil
 }
 
-// indexIssue sends issue data to search-service for embedding indexing.
+// indexIssue sends issue data to external-services for embedding indexing.
 // Phase 2: replace with Kafka IssueCreated/IssueUpdated events.
 func (h *Handler) indexIssue(issueID, title, description, projectID string) {
 	payload := map[string]string{
@@ -123,7 +125,7 @@ func (h *Handler) indexIssue(issueID, title, description, projectID string) {
 
 	resp, err := http.Post(h.searchServiceURL+"/internal/index", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("WARNING: failed to index issue %s in search-service: %v", issueID, err)
+		log.Printf("WARNING: failed to index issue %s in external-services: %v", issueID, err)
 		return
 	}
 	resp.Body.Close()
@@ -149,6 +151,42 @@ func (h *Handler) notifyGateway(issueID, eventType string, data map[string]inter
 		return
 	}
 	resp.Body.Close()
+}
+
+// sendInviteEmail fires an async HTTP call to the mail service after a successful invite.
+// Non-blocking — runs in a goroutine so invite response is not delayed by email delivery.
+func (h *Handler) sendInviteEmail(
+	toEmail, inviterName, projectName, projectID, role, token string,
+	inviteeExists bool,
+) {
+	if h.mailServiceURL == "" {
+		log.Printf("INFO: MAIL_SERVICE_URL not set — skipping invite email to %s", toEmail)
+		return
+	}
+
+	go func() {
+		payload := map[string]interface{}{
+			"to_email":       toEmail,
+			"inviter_name":   inviterName,
+			"project_name":   projectName,
+			"project_id":     projectID,
+			"role":           role,
+			"token":          token,
+			"invitee_exists": inviteeExists,
+		}
+		jsonData, _ := json.Marshal(payload)
+		resp, err := http.Post(
+			h.mailServiceURL+"/api/mail/invite",
+			"application/json",
+			bytes.NewBuffer(jsonData),
+		)
+		if err != nil {
+			log.Printf("WARNING: failed to send invite email to %s: %v", toEmail, err)
+			return
+		}
+		resp.Body.Close()
+		log.Printf("INFO: invite email triggered for %s (project: %s)", toEmail, projectID)
+	}()
 }
 
 // joinStrings joins a string slice with a separator.

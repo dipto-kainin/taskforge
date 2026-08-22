@@ -99,7 +99,7 @@ All services deployed and configured for production cloud constraints:
 - **Upstash Redis** with `rediss://` TLS connection for secure cloud pub/sub
 
 ### 🛡️ Graceful Degradation
-Gateway search methods return empty arrays when `SEARCH_SERVICE_URL` is unset — the entire search/AI layer can be toggled on or off via a single environment variable without any code changes or service restarts.
+Gateway search methods return empty arrays when `EXTERNAL_SERVICES_URL` is unset — the entire search/AI layer can be toggled on or off via a single environment variable without any code changes or service restarts.
 
 ### 🩺 Live Service Health Widget
 The login page features a live multi-service health widget that polls `GET /api/status` (a deep health endpoint that checks auth-service and core-service reachability in parallel). The Submit button stays disabled until all critical services report `ok` — preventing 502 errors on Render's cold-start wake-up.

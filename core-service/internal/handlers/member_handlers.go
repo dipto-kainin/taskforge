@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"strings"
 	"time"
 
 	"github.com/dipto-kainin/kai"
+	"github.com/taskforge/core-service/internal/auth"
 )
 
 func (h *Handler) ListProjectMembers(c *kai.Context) {
@@ -103,12 +105,39 @@ func (h *Handler) InviteToProject(c *kai.Context) {
 		return
 	}
 
+	// Fetch project name & inviter name for email
+	var projectName string
+	h.db.QueryRow(`SELECT name FROM core.projects WHERE id = $1`, projectID).Scan(&projectName)
+
+	inviterName := "A teammate"
+	if callerIDs, ok := h.batchFetchUsers([]string{callerID})[callerID]; ok {
+		if name, ok := callerIDs["name"].(string); ok && name != "" {
+			inviterName = name
+		}
+	}
+
 	inviteeInfo, err := h.fetchUserByEmail(email)
-	if err != nil || inviteeInfo == nil {
-		c.JSON(404, map[string]string{"error": "no user found with that email"})
+	var inviteeID string
+	if inviteeInfo != nil {
+		if id, ok := inviteeInfo["id"].(string); ok {
+			inviteeID = id
+		}
+	}
+
+	inviteToken, _ := auth.GenerateInviteToken(projectID, email, role)
+
+	if err != nil || inviteeInfo == nil || inviteeID == "" {
+		// User account does not exist yet (or has no valid UUID) — send sign-up invitation email with JWT token (non-blocking)
+		h.sendInviteEmail(email, inviterName, projectName, projectID, role, inviteToken, false)
+		c.JSON(201, map[string]interface{}{
+			"id":        "pending-" + email,
+			"name":      email,
+			"email":     email,
+			"avatarUrl": "",
+			"role":      role,
+		})
 		return
 	}
-	inviteeID, _ := inviteeInfo["id"].(string)
 
 	var existing int
 	h.db.QueryRow(
@@ -129,12 +158,110 @@ func (h *Handler) InviteToProject(c *kai.Context) {
 		return
 	}
 
+	// Fire invite email for existing user with JWT token
+	h.sendInviteEmail(email, inviterName, projectName, projectID, role, inviteToken, true)
+
 	c.JSON(201, map[string]interface{}{
 		"id":        inviteeID,
 		"name":      inviteeInfo["name"],
 		"email":     inviteeInfo["email"],
 		"avatarUrl": inviteeInfo["avatarUrl"],
 		"role":      role,
+	})
+}
+
+// JoinProjectViaInvite verifies temporal JWT token, email match, checks membership, and joins project.
+func (h *Handler) JoinProjectViaInvite(c *kai.Context) {
+	data, err := c.GetJSON()
+	if err != nil {
+		c.JSON(400, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	tokenStr, _ := data["token"].(string)
+	if tokenStr == "" {
+		c.JSON(400, map[string]string{"error": "invite token is required"})
+		return
+	}
+
+	userID := getUserID(c)
+	if userID == "" {
+		c.JSON(401, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	// 1. Verify JWT signature & expiration
+	claims, err := auth.VerifyInviteToken(tokenStr)
+	if err != nil {
+		c.JSON(400, map[string]string{"error": "invalid or expired invite link"})
+		return
+	}
+
+	// 2. Fetch authenticated user's email to verify it matches token email
+	var callerEmail string
+	if emailVal, ok := c.Get("email"); ok {
+		callerEmail, _ = emailVal.(string)
+	}
+	if callerEmail == "" {
+		callerUsers := h.batchFetchUsers([]string{userID})
+		if callerInfo := callerUsers[userID]; callerInfo != nil {
+			callerEmail, _ = callerInfo["email"].(string)
+		}
+	}
+
+	if callerEmail == "" {
+		c.JSON(401, map[string]string{"error": "user email not found in token"})
+		return
+	}
+
+	if strings.ToLower(strings.TrimSpace(callerEmail)) != strings.ToLower(strings.TrimSpace(claims.Email)) {
+		c.JSON(403, map[string]string{"error": "this invite link was sent to a different email address"})
+		return
+	}
+
+	// 3. Check if user is ALREADY added to the project
+	var existing int
+	h.db.QueryRow(
+		`SELECT COUNT(*) FROM core.project_members WHERE project_id = $1 AND user_id = $2`,
+		claims.ProjectID, userID,
+	).Scan(&existing)
+
+	var key, name, desc string
+	err = h.db.QueryRow(
+		`SELECT key, name, description FROM core.projects WHERE id = $1`, claims.ProjectID,
+	).Scan(&key, &name, &desc)
+
+	if err != nil {
+		c.JSON(404, map[string]string{"error": "project not found"})
+		return
+	}
+
+	if existing > 0 {
+		c.JSON(200, map[string]interface{}{
+			"id": claims.ProjectID, "key": key, "name": name, "description": desc, "already_joined": true,
+		})
+		return
+	}
+
+	// 4. Add user to project
+	role := claims.Role
+	if role == "" {
+		role = "member"
+	}
+
+	_, err = h.db.Exec(
+		`INSERT INTO core.project_members (project_id, user_id, role)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (project_id, user_id) DO NOTHING`,
+		claims.ProjectID, userID, role,
+	)
+	if err != nil {
+		c.JSON(500, map[string]string{"error": "failed to join project"})
+		return
+	}
+
+	c.JSON(200, map[string]interface{}{
+		"id": claims.ProjectID, "key": key, "name": name, "description": desc, "already_joined": false,
 	})
 }
 

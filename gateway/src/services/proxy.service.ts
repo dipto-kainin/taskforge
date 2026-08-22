@@ -6,7 +6,8 @@ import { GraphQLError } from 'graphql';
 export class ProxyService {
   private authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:8080';
   private coreUrl = process.env.CORE_SERVICE_URL || 'http://localhost:8081';
-  private searchUrl = process.env.SEARCH_SERVICE_URL || 'http://localhost:8000';
+  private searchUrl = process.env.EXTERNAL_SERVICES_URL || 'http://localhost:8000';
+  private servicesUrl = process.env.EXTERNAL_SERVICES_URL || 'http://localhost:8000'; // services platform
 
   constructor() {
     axios.interceptors.response.use(
@@ -142,6 +143,24 @@ export class ProxyService {
     }
   }
 
+  async joinProject(projectId: string, context: any) {
+    const { data } = await axios.post(
+      `${this.coreUrl}/api/projects/${projectId}/join`,
+      {},
+      { headers: this.getHeaders(context) },
+    );
+    return data;
+  }
+
+  async joinProjectWithInvite(token: string, context: any) {
+    const { data } = await axios.post(
+      `${this.coreUrl}/api/projects/join-invite`,
+      { token },
+      { headers: this.getHeaders(context) },
+    );
+    return data;
+  }
+
   async joinProjectWithCode(code: string, context: any) {
     const { data } = await axios.post(
       `${this.coreUrl}/api/projects/join`,
@@ -161,12 +180,17 @@ export class ProxyService {
   }
 
   async inviteToProject(projectId: string, email: string, role: string, context: any) {
-    const { data } = await axios.post(
-      `${this.coreUrl}/api/projects/${projectId}/members`,
-      { email, role },
-      { headers: this.getHeaders(context) },
-    );
-    return data;
+    try {
+      const { data } = await axios.post(
+        `${this.coreUrl}/api/projects/${projectId}/members`,
+        { email, role },
+        { headers: this.getHeaders(context) },
+      );
+      return data;
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || e?.response?.data?.message || e.message;
+      throw new GraphQLError(msg);
+    }
   }
 
   async removeFromProject(projectId: string, userId: string, context: any) {
@@ -302,16 +326,16 @@ export class ProxyService {
     return true;
   }
 
-  // ---- Search Service (optional — gracefully disabled if SEARCH_SERVICE_URL not set) ----
+  // ---- Search Service (optional — gracefully disabled if EXTERNAL_SERVICES_URL not set) ----
 
   private get searchEnabled(): boolean {
-    return !!process.env.SEARCH_SERVICE_URL;
+    return !!process.env.EXTERNAL_SERVICES_URL;
   }
 
-  async search(query: string, projectId: string | null, context: any) {
+  async search(query: string, projectId: string | null, useAI: boolean = false, context: any) {
     if (!this.searchEnabled) return [];
     try {
-      const params: any = { q: query };
+      const params: any = { q: query, use_ai: useAI };
       if (projectId) params.project_id = projectId;
       const { data } = await axios.get(`${this.searchUrl}/api/search`, {
         params,
@@ -352,16 +376,67 @@ export class ProxyService {
     }
   }
 
-  async summarizeComments(issueId: string, comments: any[]) {
+  async summarizeComments(issueId: string, comments: any[], context: any) {
     if (!this.searchEnabled) return { summary: 'Search service unavailable.', comment_count: comments.length };
+    // Extract projectId from context if available (passed in resolver)
+    const projectId = (context as any)?._projectId ?? null;
     try {
       const { data } = await axios.post(`${this.searchUrl}/api/ai/summarize-comments`, {
         issue_id: issueId,
         comments,
+        project_id: projectId,
       });
       return data;
     } catch {
       return { summary: 'Search service unavailable.', comment_count: comments.length };
+    }
+  }
+
+  // ---- Services Platform — Project AI Key Management ----
+
+  async projectHasAiKey(projectId: string, context: any): Promise<boolean> {
+    if (!this.searchEnabled) return false;
+    try {
+      const { data } = await axios.get(
+        `${this.servicesUrl}/api/ai/project-key/${projectId}/exists`,
+        { headers: this.getHeaders(context) },
+      );
+      return data?.has_key ?? false;
+    } catch {
+      return false;
+    }
+  }
+
+  async setProjectApiKey(
+    projectId: string,
+    provider: string,
+    apiKey: string,
+    context: any,
+  ): Promise<boolean> {
+    if (!this.searchEnabled) return false;
+    try {
+      await axios.post(
+        `${this.servicesUrl}/api/ai/project-key`,
+        { project_id: projectId, provider, api_key: apiKey },
+        { headers: this.getHeaders(context) },
+      );
+      return true;
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e.message;
+      throw new GraphQLError(`Failed to set API key: ${msg}`);
+    }
+  }
+
+  async removeProjectApiKey(projectId: string, context: any): Promise<boolean> {
+    if (!this.searchEnabled) return false;
+    try {
+      await axios.delete(
+        `${this.servicesUrl}/api/ai/project-key/${projectId}`,
+        { headers: this.getHeaders(context) },
+      );
+      return true;
+    } catch {
+      return false;
     }
   }
 }

@@ -43,7 +43,7 @@ services:
     environment:
       DATABASE_URL: "postgres://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}?search_path=core&sslmode=require"
       JWKS_URL: "${JWKS_URL}"
-      SEARCH_SERVICE_URL: "${SEARCH_SERVICE_URL}"
+      EXTERNAL_SERVICES_URL: "${EXTERNAL_SERVICES_URL}"
       GATEWAY_NOTIFY_URL: "${GATEWAY_NOTIFY_URL}"
       PORT: "8081"
     healthcheck:
@@ -53,22 +53,30 @@ services:
       retries: 10
       start_period: 10s
 
-  # ── Search Service (Python — schema: search) ───────────────────────────────
-  search-service:
-    build: ./search-service
+  # ── External Services Platform (Python — schema: search) ──────────────────────────────────
+  external-services:
+    build: ./external-services
     ports:
       - "8000:8000"
     env_file: .env
     environment:
-      DATABASE_URL: "postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}"
+      DATABASE_URL: "postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}?sslmode=require"
       JWKS_URL: "${JWKS_URL}"
-      EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+
+      SMTP_HOST: "${SMTP_HOST:-smtp.gmail.com}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3000}"
+      SECRET_KEY: "${SECRET_KEY}"
+      CORE_SERVICE_URL: "http://core-service:8081"
     healthcheck:
+      # /health responds immediately — model loads in background
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 20
-      start_period: 30s
+      retries: 10
+      start_period: 15s
 
   # ── Gateway (NestJS) ───────────────────────────────────────────────────────
   gateway:
@@ -84,7 +92,7 @@ services:
     environment:
       AUTH_SERVICE_URL: "${AUTH_SERVICE_URL}"
       CORE_SERVICE_URL: "${CORE_SERVICE_URL}"
-      SEARCH_SERVICE_URL: "${SEARCH_SERVICE_URL}"
+      EXTERNAL_SERVICES_URL: "${EXTERNAL_SERVICES_URL}"
       REDIS_URL: "${REDIS_URL}"
       JWKS_URL: "${JWKS_URL}"
       PORT: "4000"

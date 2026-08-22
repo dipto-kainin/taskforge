@@ -5,7 +5,7 @@ import axios from 'axios';
 export class HealthController {
   private authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:8080';
   private coreUrl = process.env.CORE_SERVICE_URL || 'http://localhost:8081';
-  private searchUrl = process.env.SEARCH_SERVICE_URL;
+  private externalServicesUrl = process.env.EXTERNAL_SERVICES_URL;
 
   @Get(['health', 'status', 'api/status'])
   async health() {
@@ -18,22 +18,25 @@ export class HealthController {
       }
     };
 
-    const [authStatus, coreStatus, searchStatus] = await Promise.all([
+    const [authStatus, coreStatus, extServicesStatus] = await Promise.all([
       checkService(this.authUrl, '/.well-known/jwks.json'),
       checkService(this.coreUrl, '/health'),
-      this.searchUrl ? checkService(this.searchUrl, '/health') : Promise.resolve('disabled'),
+      this.externalServicesUrl
+        ? checkService(this.externalServicesUrl, '/health')
+        : Promise.resolve('disabled'),
     ]);
 
     const criticalOk = authStatus === 'ok' && coreStatus === 'ok';
+    const allHealthy = criticalOk && extServicesStatus !== 'error';
 
     return {
       status: criticalOk ? 'ok' : 'degraded',
-      allHealthy: criticalOk,
+      allHealthy,
       services: [
         { name: 'Gateway', status: 'ok', critical: true },
         { name: 'Auth Service', status: authStatus, critical: true },
         { name: 'Core Service', status: coreStatus, critical: true },
-        { name: 'Search Service', status: searchStatus, critical: false },
+        { name: 'External Services', status: extServicesStatus, critical: false },
       ],
     };
   }

@@ -85,8 +85,8 @@ AUTH_DB_URL="jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DATABASE}?currentSchem
 # core-service: libpq (Go)
 CORE_DB_URL="postgres://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}?search_path=core&sslmode=require"
 
-# search-service: asyncpg (Python)
-SEARCH_DB_URL="postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}"
+# external-services platform: asyncpg (Python)
+SEARCH_DB_URL="postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}?sslmode=require"
 
 # ── Commands ────────────────────────────────────────────────────
 
@@ -130,11 +130,11 @@ cmd_start() {
       printf "\r"; error "core-service          ${RED}timeout${NC}"; services_ok=false
     fi
 
-    printf "  ${DIM}Waiting for search-service...${NC}"
-    if wait_for_health "search-service" "http://localhost:8000/health" 60; then
-      printf "\r"; success "search-service        ${GREEN}healthy${NC}"
+    printf "  ${DIM}Waiting for services platform...${NC}"
+    if wait_for_health "external-services" "http://localhost:8000/health" 60; then
+      printf "\r"; success "external-services     ${GREEN}healthy${NC}"
     else
-      printf "\r"; error "search-service        ${RED}timeout${NC}"; services_ok=false
+      printf "\r"; error "external-services     ${RED}timeout${NC}"; services_ok=false
     fi
 
     printf "  ${DIM}Waiting for gateway...${NC}"
@@ -185,7 +185,7 @@ cmd_dev() {
   echo ""
 
   # Ensure non-docker native service ports are clear
-  $DC stop core-service search-service gateway frontend 2>/dev/null || true
+  $DC stop core-service external-services gateway frontend 2>/dev/null || true
   fuser -k 8081/tcp 8000/tcp 4000/tcp 3000/tcp 2>/dev/null || true
 
   # ── 1. Start redis + auth-service in Docker ────────────────────
@@ -242,7 +242,7 @@ cmd_dev() {
     DATABASE_URL="$CORE_DB_URL" \
     JWKS_URL="$JWKS_LOCAL" \
     AUTH_SERVICE_URL="http://localhost:8080" \
-    SEARCH_SERVICE_URL="http://localhost:8000" \
+    EXTERNAL_SERVICES_URL="http://localhost:8000" \
     GATEWAY_NOTIFY_URL="http://localhost:4000/internal/notify" \
     PORT="8081" \
     go run ./cmd/main.go 2>&1
@@ -251,23 +251,38 @@ cmd_dev() {
   info "core-service  PID=$!  →  logs: .dev-logs/core-service.log"
   echo ""
 
-  # ── 3. search-service (Python / FastAPI --reload) ──────────────
-  step "Starting search-service  [Python / FastAPI --reload]..."
+  # ── 3. external-services platform (Python / FastAPI --reload) ───────────
+  step "Starting external-services platform  [Python / FastAPI --reload]..."
   (
-    cd "$SCRIPT_DIR/search-service"
+    cd "$SCRIPT_DIR/external-services"
     if [ -d "venv" ]; then
       source venv/bin/activate 2>/dev/null || true
     elif [ -d ".venv" ]; then
       source .venv/bin/activate 2>/dev/null || true
     fi
+    if ! command -v uvicorn &>/dev/null && ! python3 -m uvicorn --version &>/dev/null; then
+      echo "ERROR: uvicorn is not installed in external-services. Please set up the venv:"
+      echo "  cd external-services"
+      echo "  python3 -m venv venv"
+      echo "  source venv/bin/activate"
+      echo "  pip install -r requirements.txt"
+      exit 1
+    fi
     DATABASE_URL="$SEARCH_DB_URL" \
     JWKS_URL="$JWKS_LOCAL" \
-    EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2" \
+
+    SMTP_HOST="${SMTP_HOST:-smtp.gmail.com}" \
+    SMTP_PORT="${SMTP_PORT:-587}" \
+    SMTP_USER="${SMTP_USER:-}" \
+    SMTP_PASSWORD="${SMTP_PASSWORD:-}" \
+    FRONTEND_URL="${FRONTEND_URL:-http://localhost:3000}" \
+    SECRET_KEY="${SECRET_KEY:-}" \
+    CORE_SERVICE_URL="http://localhost:8081" \
     AUTO_MIGRATE=false \
-    uvicorn main:app --reload --host 0.0.0.0 --port 8000 2>&1
-  ) > "$LOGS_DIR/search-service.log" 2>&1 &
+    python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 2>&1
+  ) > "$LOGS_DIR/external-services.log" 2>&1 &
   DEV_PIDS+=($!)
-  info "search-service PID=$!  →  logs: .dev-logs/search-service.log"
+  info "external-services PID=$!  →  logs: .dev-logs/external-services.log"
   echo ""
 
   # ── 4. gateway (NestJS --watch) ────────────────────────────────
@@ -277,7 +292,7 @@ cmd_dev() {
     [ ! -d node_modules ] && npm install -q
     AUTH_SERVICE_URL="http://localhost:8080" \
     CORE_SERVICE_URL="http://localhost:8081" \
-    SEARCH_SERVICE_URL="http://localhost:8000" \
+    EXTERNAL_SERVICES_URL="http://localhost:8000" \
     REDIS_URL="${REDIS_URL:-redis://localhost:6379}" \
     JWKS_URL="$JWKS_LOCAL" \
     PORT="4000" \
@@ -304,7 +319,7 @@ cmd_dev() {
   echo -e "  ${BOLD}📊 GraphQL:${NC}     ${CYAN}http://localhost:4000/graphql${NC}  ${DIM}(NestJS --watch)${NC}"
   echo -e "  ${BOLD}🔑 Auth API:${NC}    ${CYAN}http://localhost:8080${NC}  ${DIM}(Spring Boot / Docker)${NC}"
   echo -e "  ${BOLD}⚙️  Core API:${NC}    ${CYAN}http://localhost:8081${NC}  ${DIM}(Go)${NC}"
-  echo -e "  ${BOLD}🔍 Search API:${NC}  ${CYAN}http://localhost:8000${NC}  ${DIM}(FastAPI --reload)${NC}"
+  echo -e "  ${BOLD}🔍 Services API:${NC} ${CYAN}http://localhost:8000${NC}  ${DIM}(FastAPI --reload)${NC}"
   echo -e "  ${BOLD}☁️  Database:${NC}    ${DIM}Supabase cloud (schemas: auth / core / search)${NC}"
   echo ""
   echo -e "  ${BOLD}📋 Logs:${NC}        ${DIM}.dev-logs/<service>.log${NC}  or  ${CYAN}./taskforge.sh logs -f <service>${NC}"
@@ -390,19 +405,31 @@ cmd_migrate() {
     divider
   }
 
-  _migrate_search() {
-    step "search-service  [Python — table + pgvector index]"
-    info "Running search-service migrations on database..."
+  _migrate_external_services() {
+    step "external-services  [Python — table + pgvector index]"
+    info "Running external-services platform migrations on database..."
     (
-      cd "$SCRIPT_DIR/search-service"
+      cd "$SCRIPT_DIR/external-services"
       if [ -d "venv" ]; then
         source venv/bin/activate 2>/dev/null || true
       elif [ -d ".venv" ]; then
         source .venv/bin/activate 2>/dev/null || true
       fi
-      DATABASE_URL="$SEARCH_DB_URL" AUTO_MIGRATE=true python3 -c "import asyncio, database; db = database.Database(); asyncio.run(db.connect()); asyncio.run(db.create_tables()); asyncio.run(db.disconnect())" 2>/dev/null || true
+      DATABASE_URL="$SEARCH_DB_URL" \
+      SECRET_KEY="${SECRET_KEY:-placeholder}" \
+      AUTO_MIGRATE=true \
+      python3 -c "
+import asyncio, sys
+sys.path.insert(0, '.')
+from app.database import Database
+db = Database()
+asyncio.run(db.connect())
+asyncio.run(db.migrate())
+asyncio.run(db.disconnect())
+print('Services migrations applied.')
+" 2>/dev/null || true
     )
-    success "search-service migrations applied"
+    success "external-services migrations applied"
     divider
   }
 
@@ -418,13 +445,13 @@ cmd_migrate() {
     core|core-service)
       _migrate_core
       ;;
-    search|search-service)
-      _migrate_search
+    search|search-service|external-services)
+      _migrate_external_services
       ;;
     all)
       _migrate_auth
       _migrate_core
-      _migrate_search
+      _migrate_external_services
       ;;
     *)
       error "Unknown target: ${TARGET}"
@@ -433,7 +460,7 @@ cmd_migrate() {
       echo ""
       echo -e "  ${CYAN}auth${NC}     Restart auth-service  (Hibernate DDL)"
       echo -e "  ${CYAN}core${NC}     Restart core-service  (Go CREATE TABLE IF NOT EXISTS)"
-      echo -e "  ${CYAN}search${NC}   Restart search-service (Python + pgvector)"
+      echo -e "  ${CYAN}search${NC}   Run services platform migrations (Python + pgvector)"
       echo -e "  ${CYAN}all${NC}      Restart all three      (default)"
       echo ""
       return 1
@@ -468,8 +495,8 @@ cmd_logs() {
       core|core-service)
         $DC logs --tail=100 core-service
         ;;
-      search|search-service)
-        $DC logs --tail=100 search-service
+      search|search-service|external-services)
+        $DC logs --tail=100 external-services
         ;;
       gateway)
         $DC logs --tail=100 gateway
@@ -494,7 +521,7 @@ cmd_logs() {
     echo -e "  ${CYAN}1${NC})  All services"
     echo -e "  ${CYAN}2${NC})  auth-service     ${DIM}(Java / Spring Boot)${NC}"
     echo -e "  ${CYAN}3${NC})  core-service     ${DIM}(Go)${NC}"
-    echo -e "  ${CYAN}4${NC})  search-service   ${DIM}(Python / FastAPI)${NC}"
+    echo -e "  ${CYAN}4${NC})  external-services ${DIM}(Python / FastAPI)${NC}"
     echo -e "  ${CYAN}5${NC})  gateway          ${DIM}(TypeScript / NestJS)${NC}"
     echo -e "  ${CYAN}6${NC})  frontend         ${DIM}(Vite / React)${NC}"
     echo -e "  ${CYAN}7${NC})  redis            ${DIM}(Redis)${NC}"
@@ -507,7 +534,7 @@ cmd_logs() {
       1) $DC logs -f --tail=50 ;;
       2) $DC logs -f --tail=100 auth-service ;;
       3) $DC logs -f --tail=100 core-service ;;
-      4) $DC logs -f --tail=100 search-service ;;
+      4) $DC logs -f --tail=100 external-services ;;
       5) $DC logs -f --tail=100 gateway ;;
       6) $DC logs -f --tail=100 frontend ;;
       7) $DC logs -f --tail=100 redis ;;
@@ -525,7 +552,7 @@ cmd_status() {
   printf "  ${BOLD}%-18s %-12s %-10s %-8s${NC}\n" "SERVICE" "STATUS" "PORT" "HEALTH"
   printf "  ${DIM}%-18s %-12s %-10s %-8s${NC}\n" "──────────────────" "────────────" "──────────" "────────"
 
-  local services=("redis:6379" "auth-service:8080" "core-service:8081" "search-service:8000" "gateway:4000" "frontend:3000")
+  local services=("redis:6379" "auth-service:8080" "core-service:8081" "external-services:8000" "gateway:4000" "frontend:3000")
   local health_urls=("" "http://localhost:8080/.well-known/jwks.json" "http://localhost:8081/health" "http://localhost:8000/health" "http://localhost:4000/health" "http://localhost:3000")
 
   for i in "${!services[@]}"; do

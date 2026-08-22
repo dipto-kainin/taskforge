@@ -118,6 +118,28 @@ export class ProjectResolver {
   }
 
   @Mutation()
+  async joinProject(@Args('projectId') projectId: string, @Context() context: any) {
+    const p = await this.proxy.joinProject(projectId, context);
+    return {
+      id: p.id,
+      key: p.key,
+      name: p.name,
+      description: p.description,
+    };
+  }
+
+  @Mutation()
+  async joinProjectWithInvite(@Args('token') token: string, @Context() context: any) {
+    const p = await this.proxy.joinProjectWithInvite(token, context);
+    return {
+      id: p.id,
+      key: p.key,
+      name: p.name,
+      description: p.description,
+    };
+  }
+
+  @Mutation()
   async joinProjectWithCode(@Args('code') code: string, @Context() context: any) {
     const p = await this.proxy.joinProjectWithCode(code, context);
     return {

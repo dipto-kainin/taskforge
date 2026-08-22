@@ -7,9 +7,10 @@ type Query {
   issue(id: ID!): Issue
   sprints(projectId: ID!): [Sprint!]!
   labels(projectId: ID!): [Label!]!
-  search(query: String!, projectId: String): [SearchResult!]!
+  search(query: String!, projectId: String, useAI: Boolean): [SearchResult!]!
   dashboard: DashboardData!
   activeJoinCode(projectId: ID!): ActiveJoinCode
+  projectHasAiKey(projectId: ID!): Boolean!
 }
 
 type Mutation {
@@ -18,6 +19,8 @@ type Mutation {
   refreshToken(refreshToken: String!): TokenPayload!
 
   createProject(input: CreateProjectInput!): Project!
+  joinProject(projectId: ID!): Project!
+  joinProjectWithInvite(token: String!): Project!
   joinProjectWithCode(code: String!): Project!
   generateProjectJoinCode(projectId: ID!, durationMinutes: Int!, override: Boolean): ActiveJoinCode!
   createSprint(projectId: ID!, input: CreateSprintInput!): Sprint!
@@ -38,6 +41,9 @@ type Mutation {
   duplicateCheck(input: DuplicateCheckInput!): DuplicateCheckResult!
   suggestLabels(input: SuggestLabelsInput!): SuggestLabelsResult!
   summarizeComments(issueId: ID!, comments: [CommentInput!]!): SummaryResult!
+
+  setProjectApiKey(projectId: ID!, provider: String!, apiKey: String!): Boolean!
+  removeProjectApiKey(projectId: ID!): Boolean!
 }
 
 type Subscription {

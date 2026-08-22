@@ -51,13 +51,18 @@ func main() {
 	if authServiceURL == "" {
 		authServiceURL = "http://localhost:8080"
 	}
-	searchServiceURL := os.Getenv("SEARCH_SERVICE_URL")
+	searchServiceURL := os.Getenv("EXTERNAL_SERVICES_URL")
 	if searchServiceURL == "" {
 		searchServiceURL = "http://localhost:8000"
 	}
 	gatewayNotifyURL := os.Getenv("GATEWAY_NOTIFY_URL")
 	if gatewayNotifyURL == "" {
 		gatewayNotifyURL = "http://localhost:4000/internal/notify"
+	}
+	mailServiceURL := os.Getenv("MAIL_SERVICE_URL")
+	if mailServiceURL == "" {
+		// Default to the services platform (same host as search service)
+		mailServiceURL = searchServiceURL
 	}
 
 	// Create app
@@ -72,7 +77,7 @@ func main() {
 	})
 
 	// Initialize handlers
-	h := handlers.New(database, authServiceURL, searchServiceURL, gatewayNotifyURL)
+	h := handlers.New(database, authServiceURL, searchServiceURL, gatewayNotifyURL, mailServiceURL)
 
 	// Auth middleware
 	authMW := middleware.JWKSAuth(jwksURL)
@@ -87,6 +92,8 @@ func main() {
 	api.POST("/projects", authMW, h.CreateProject)
 	api.GET("/projects", authMW, h.ListProjects)           // user-scoped: returns only projects the caller is a member of
 	api.POST("/projects/join", authMW, h.JoinProject)
+	api.POST("/projects/join-invite", authMW, h.JoinProjectViaInvite)
+	api.POST("/projects/:id/join", authMW, h.JoinProjectByID)
 	api.POST("/projects/:id/join-codes", authMW, h.GenerateJoinCode)
 	api.GET("/projects/:id/join-codes/active", authMW, h.GetActiveJoinCode)
 	api.GET("/projects/:id", authMW, h.GetProject)

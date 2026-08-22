@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>{% block title %}TaskForge{% endblock %}</title>
+  <style>
+    /* Reset */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+                   Ubuntu, sans-serif;
+      background-color: #0f1117;
+      color: #e2e8f0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Wrapper */
+    .wrapper {
+      max-width: 600px;
+      margin: 40px auto;
+      background: #1a1d27;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%);
+      padding: 40px 48px 36px;
+      text-align: center;
+    }
+    .header-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 0;
+    }
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .logo-text {
+      font-size: 22px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+
+    /* Body */
+    .body {
+      padding: 40px 48px;
+    }
+
+    /* Content block */
+    {% block styles %}{% endblock %}
+
+    /* Footer */
+    .footer {
+      padding: 24px 48px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      text-align: center;
+    }
+    .footer p {
+      font-size: 12px;
+      color: #4a5568;
+      line-height: 1.6;
+    }
+    .footer a {
+      color: #6366f1;
+      text-decoration: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .wrapper { margin: 0; border-radius: 0; }
+      .header, .body, .footer { padding: 28px 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-logo">
+        <div class="logo-icon">⚡</div>
+        <span class="logo-text">TaskForge</span>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="body">
+      {% block content %}{% endblock %}
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>
+        This email was sent by TaskForge. If you didn't expect this email, you can safely ignore it.<br/>
+        &copy; 2025 TaskForge. All rights reserved.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
