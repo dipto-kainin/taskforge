@@ -1,114 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>{% block title %}TaskForge{% endblock %}</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  <title>{% block title %}Block Work{% endblock %}</title>
+
   <style>
-    /* Reset */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-                   Ubuntu, sans-serif;
-      background-color: #0f1117;
-      color: #e2e8f0;
-      -webkit-font-smoothing: antialiased;
-    }
+    @media only screen and (max-width: 640px) {
 
-    /* Wrapper */
-    .wrapper {
-      max-width: 600px;
-      margin: 40px auto;
-      background: #1a1d27;
-      border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid rgba(99, 102, 241, 0.2);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    }
+      .email-page {
+        padding: 16px 10px !important;
+      }
 
-    /* Header */
-    .header {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%);
-      padding: 40px 48px 36px;
-      text-align: center;
-    }
-    .header-logo {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 0;
-    }
-    .logo-icon {
-      width: 38px;
-      height: 38px;
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 10px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-    }
-    .logo-text {
-      font-size: 22px;
-      font-weight: 700;
-      color: #ffffff;
-      letter-spacing: -0.5px;
-    }
+      .email-card {
+        box-shadow: 5px 5px 0 #171717 !important;
+      }
 
-    /* Body */
-    .body {
-      padding: 40px 48px;
-    }
+      .header {
+        padding: 20px 22px !important;
+      }
 
-    /* Content block */
-    {% block styles %}{% endblock %}
+      .body {
+        padding: 30px 22px !important;
+      }
 
-    /* Footer */
-    .footer {
-      padding: 24px 48px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      text-align: center;
-    }
-    .footer p {
-      font-size: 12px;
-      color: #4a5568;
-      line-height: 1.6;
-    }
-    .footer a {
-      color: #6366f1;
-      text-decoration: none;
-    }
+      .footer {
+        padding: 20px 22px !important;
+      }
 
-    /* Responsive */
-    @media (max-width: 640px) {
-      .wrapper { margin: 0; border-radius: 0; }
-      .header, .body, .footer { padding: 28px 24px; }
+      .invite-title {
+        font-size: 30px !important;
+      }
     }
   </style>
 </head>
-<body>
-  <div class="wrapper">
-    <!-- Header -->
-    <div class="header">
-      <div class="header-logo">
-        <div class="logo-icon">⚡</div>
-        <span class="logo-text">TaskForge</span>
+
+<body style="
+    margin:0;
+    padding:0;
+    width:100%;
+    background-color:#f7f3e8;
+    color:#171717;
+    font-family:Arial,Helvetica,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  ">
+
+  <!-- ============================================================
+     PAGE CONTAINER
+     ============================================================ -->
+
+  <div class="email-page" style="
+    width:100%;
+    min-height:100vh;
+    background-color:#f7f3e8;
+    padding:48px 16px;
+    box-sizing:border-box;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+  ">
+
+    <!-- ======================================================
+       OUTER CARD
+       ====================================================== -->
+
+    <div class="email-card" style="
+      width:100%;
+      max-width:620px;
+      margin:0 auto;
+      background-color:#ffffff;
+      border:3px solid #171717;
+      border-radius:14px;
+      box-shadow:8px 8px 0 #171717;
+      overflow:hidden;
+      box-sizing:border-box;
+    ">
+
+      <!-- ============================================================
+         HEADER — BLOCK WORK BRAND
+         ============================================================ -->
+
+      <div class="header" style="
+        background-color:#f7f3e8;
+        padding:22px 34px;
+        border-bottom:3px solid #171717;
+        display:flex;
+        align-items:center;
+      ">
+        <img src="https://ik.imagekit.io/diptodeepbiswas/logo.png?updatedAt=1787430105013" alt="Block Work logo" style="
+          height:38px;
+          width:auto;
+          display:block;
+          margin-right:14px;
+        ">
+        <span style="
+          color:#171717;
+          font-family:Arial Black,Arial,Helvetica,sans-serif;
+          font-size:21px;
+          font-weight:900;
+          letter-spacing:-0.8px;
+          text-transform:uppercase;
+          line-height:38px;
+          display:inline-block;
+          vertical-align:middle;
+          white-space:nowrap;
+        ">
+          BLOCK WORK
+        </span>
       </div>
+
+      <!-- ====================================================
+         BODY
+         ==================================================== -->
+
+      <div class="body" style="
+        background-color:#ffffff;
+        padding:42px 40px 40px;
+      ">
+        {% block content %}{% endblock %}
+      </div>
+
+      <!-- ====================================================
+         FOOTER
+         ==================================================== -->
+
+      <div class="footer" style="
+        background-color:#f7f3e8;
+        border-top:3px solid #171717;
+        padding:24px 32px;
+        text-align:center;
+      ">
+        <p style="
+          margin:0;
+          color:#57534e;
+          font-family:Arial,Helvetica,sans-serif;
+          font-size:11px;
+          line-height:1.65;
+        ">
+          <strong style="
+            color:#171717;
+            font-weight:900;
+          ">
+            BLOCK WORK
+          </strong>
+          &nbsp;—&nbsp; Build work. Ship work.
+          <br>
+          If you didn't expect this email,
+          you can safely ignore it.
+          <br><br>
+          &copy; 2026 Block Work. All rights reserved.
+        </p>
+      </div>
+
     </div>
 
-    <!-- Body -->
-    <div class="body">
-      {% block content %}{% endblock %}
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-      <p>
-        This email was sent by TaskForge. If you didn't expect this email, you can safely ignore it.<br/>
-        &copy; 2025 TaskForge. All rights reserved.
-      </p>
-    </div>
   </div>
+
 </body>
+
 </html>
