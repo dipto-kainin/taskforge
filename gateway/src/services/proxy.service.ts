@@ -7,27 +7,31 @@ export class ProxyService implements OnModuleInit {
   private readonly logger = new Logger(ProxyService.name);
   private authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:8080';
   private coreUrl = process.env.CORE_SERVICE_URL || 'http://localhost:8081';
-  private searchUrl = process.env.EXTERNAL_SERVICES_URL || 'http://localhost:8000';
-  private servicesUrl = process.env.EXTERNAL_SERVICES_URL || 'http://localhost:8000'; // services platform
+  
+  private servicesUrl = process.env.EXTERNAL_SERVICES_URL || 'http://localhost:8000';
 
   /**
    * Fire-and-forget warmup pings on gateway startup.
-   * Triggers Render free-tier cold starts for downstream services in parallel
-   * so they are ready by the time the first real GraphQL request comes in.
+   * Uses native fetch (NOT axios) to bypass the global JWT error interceptor.
+   * Triggers Render free-tier cold starts for downstream services in parallel.
    */
   onModuleInit() {
     const ping = async (name: string, url: string) => {
+      this.logger.log(`Warmup: pinging ${name} at ${url}`);
       try {
-        await axios.get(url, { timeout: 60_000 });
-        this.logger.log(`Warmup OK: ${name}`);
-      } catch {
-        this.logger.warn(`Warmup: ${name} still starting up`);
+        // No timeout — let the connection stay open as long as Render needs
+        // to cold-start the service. AbortSignal.timeout was closing the
+        // connection before the service finished booting.
+        const res = await fetch(url);
+        this.logger.log(`Warmup OK: ${name} responded with ${res.status}`);
+      } catch (err: any) {
+        this.logger.warn(`Warmup: ${name} still starting (${err.message})`);
       }
     };
     ping('auth-service',      `${this.authUrl}/.well-known/jwks.json`);
     ping('core-service',      `${this.coreUrl}/health`);
     if (process.env.EXTERNAL_SERVICES_URL) {
-      ping('external-services', `${this.searchUrl}/health`);
+      ping('external-services', `${this.servicesUrl}/health`);
     }
   }
 
@@ -384,7 +388,7 @@ export class ProxyService implements OnModuleInit {
     try {
       const params: any = { q: query, use_ai: useAI };
       if (projectId) params.project_id = projectId;
-      const { data } = await axios.get(`${this.searchUrl}/api/search`, {
+      const { data } = await axios.get(`${this.servicesUrl}/api/search`, {
         params,
         headers: this.getHeaders(context),
       });
@@ -397,7 +401,7 @@ export class ProxyService implements OnModuleInit {
   async duplicateCheck(input: any) {
     if (!this.searchEnabled) return { is_duplicate: false, matches: [] };
     try {
-      const { data } = await axios.post(`${this.searchUrl}/api/ai/duplicate-check`, {
+      const { data } = await axios.post(`${this.servicesUrl}/api/ai/duplicate-check`, {
         title: input.title,
         description: input.description || '',
         project_id: input.projectId,
@@ -412,7 +416,7 @@ export class ProxyService implements OnModuleInit {
   async suggestLabels(input: any) {
     if (!this.searchEnabled) return { suggestions: [] };
     try {
-      const { data } = await axios.post(`${this.searchUrl}/api/ai/suggest-labels`, {
+      const { data } = await axios.post(`${this.servicesUrl}/api/ai/suggest-labels`, {
         title: input.title,
         description: input.description || '',
         project_id: input.projectId,
@@ -428,7 +432,7 @@ export class ProxyService implements OnModuleInit {
     // Extract projectId from context if available (passed in resolver)
     const projectId = (context as any)?._projectId ?? null;
     try {
-      const { data } = await axios.post(`${this.searchUrl}/api/ai/summarize-comments`, {
+      const { data } = await axios.post(`${this.servicesUrl}/api/ai/summarize-comments`, {
         issue_id: issueId,
         comments,
         project_id: projectId,
