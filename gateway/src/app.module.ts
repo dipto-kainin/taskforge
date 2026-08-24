@@ -18,7 +18,24 @@ import { HealthController } from './health.controller';
       driver: ApolloDriver,
       typePaths: [join(__dirname, '**/*.graphql')],
       subscriptions: {
-        'graphql-ws': true,
+        // SEC-08: require a Bearer token in connectionParams before a WebSocket
+        // subscription is established. Without this any unauthenticated client
+        // could subscribe to any project's real-time event stream.
+        'graphql-ws': {
+          onConnect: (ctx: any) => {
+            const authHeader =
+              ctx.connectionParams?.authorization ||
+              ctx.connectionParams?.Authorization;
+            if (!authHeader || !String(authHeader).startsWith('Bearer ')) {
+              throw new Error(
+                'Unauthorized: provide Authorization: Bearer <token> in connectionParams',
+              );
+            }
+            // Full JWT validation happens at the resolver/guard level.
+            // onConnect only gates the connection itself.
+            return true;
+          },
+        },
       },
       playground: true,
       introspection: true,

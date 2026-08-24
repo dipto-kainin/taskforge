@@ -19,7 +19,6 @@ type Mutation {
   refreshToken(refreshToken: String!): TokenPayload!
 
   createProject(input: CreateProjectInput!): Project!
-  joinProject(projectId: ID!): Project!
   joinProjectWithInvite(token: String!): Project!
   joinProjectWithCode(code: String!): Project!
   generateProjectJoinCode(projectId: ID!, durationMinutes: Int!, override: Boolean): ActiveJoinCode!

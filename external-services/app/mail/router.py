@@ -6,9 +6,10 @@ POST /api/mail/invite — send a project invite email
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
 
+from app.auth.jwks_auth import require_internal_auth
 from app.mail.service import send_invite_email
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,10 @@ class InviteEmailRequest(BaseModel):
 
 
 @router.post("/invite", status_code=202)
-async def invite_email(req: InviteEmailRequest):
+async def invite_email(
+    req: InviteEmailRequest,
+    _claims: dict = Depends(require_internal_auth),  # SEC-03: auth required
+):
     """
     Send a project invite email.
     Returns 202 Accepted immediately — email is sent asynchronously.

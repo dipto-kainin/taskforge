@@ -34,7 +34,17 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .authorizeHttpRequests(auth -> auth
+                        // Public auth endpoints (login, register, refresh)
+                        .requestMatchers("/api/auth/**").permitAll()
+                        // JWKS endpoint must be public so all services can fetch public keys
+                        .requestMatchers("/.well-known/jwks.json").permitAll()
+                        // SEC-07: user-lookup endpoints now require a valid access token.
+                        // Core-service forwards the caller's JWT on these internal calls.
+                        .requestMatchers("/api/users/**").authenticated()
+                        // Everything else also requires auth
+                        .anyRequest().authenticated()
+                )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -47,8 +57,13 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        // SEC-09: restrict CORS to the configured frontend origin only.
+        // Wildcard origin + credentials is blocked by the CORS spec and was
+        // worked around via allowedOriginPatterns("*") — now locked to FRONTEND_URL.
+        String frontendUrl = System.getenv().getOrDefault("FRONTEND_URL", "http://localhost:3000");
+
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedOriginPatterns(List.of(frontendUrl));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

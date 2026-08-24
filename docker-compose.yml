@@ -3,10 +3,12 @@ services:
   # ── Redis (local) ──────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # SEC-10: removed host port binding (was "6379:6379").
+    # Redis is only reachable from other containers on the internal Docker network.
+    # SEC-10: added requirepass to prevent unauthenticated access.
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -14,14 +16,17 @@ services:
   # ── Auth Service (Spring Boot — schema: auth) ──────────────────────────────
   auth-service:
     build: ./auth-service
-    ports:
-      - "8080:8080"
+    # SEC-10: removed host port binding (was "8080:8080").
+    # Auth-service is only reachable via the gateway on the internal network.
     env_file: .env
     environment:
       SPRING_DATASOURCE_URL: "jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DATABASE}?currentSchema=taskforge_auth&sslmode=require"
       SPRING_DATASOURCE_USERNAME: "${PG_USER}"
       SPRING_DATASOURCE_PASSWORD: "${PG_PASSWORD}"
       HIBERNATE_DDL_AUTO: "${HIBERNATE_DDL_AUTO:-update}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3000}"
+      # SEC-04: RSA private key loaded from env var — survives restarts on Render.
+      RSA_PRIVATE_KEY: "${RSA_PRIVATE_KEY}"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/.well-known/jwks.json || exit 1"]
       interval: 10s
@@ -34,8 +39,8 @@ services:
     build:
       context: ../
       dockerfile: Capstone/core-service/Dockerfile
-    ports:
-      - "8081:8081"
+    # SEC-10: removed host port binding (was "8081:8081").
+    # Core-service is only reachable via the gateway on the internal network.
     depends_on:
       auth-service:
         condition: service_healthy
@@ -46,6 +51,8 @@ services:
       EXTERNAL_SERVICES_URL: "${EXTERNAL_SERVICES_URL}"
       GATEWAY_NOTIFY_URL: "${GATEWAY_NOTIFY_URL}"
       PORT: "8081"
+      # SEC-08: pre-shared secret for /internal/notify endpoint authentication
+      INTERNAL_SECRET: "${INTERNAL_SECRET}"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8081/health || exit 1"]
       interval: 10s
@@ -56,13 +63,12 @@ services:
   # ── External Services Platform (Python — schema: search) ──────────────────────────────────
   external-services:
     build: ./external-services
-    ports:
-      - "8000:8000"
+    # SEC-10: removed host port binding (was "8000:8000").
+    # External-services is only reachable via the gateway on the internal network.
     env_file: .env
     environment:
       DATABASE_URL: "postgresql://${PG_USER}:${PG_PASSWORD}@${PG_HOST}:${PG_PORT}/${PG_DATABASE}?sslmode=require"
       JWKS_URL: "${JWKS_URL}"
-
       SMTP_HOST: "${SMTP_HOST:-smtp.gmail.com}"
       SMTP_PORT: "${SMTP_PORT:-587}"
       SMTP_USER: "${SMTP_USER}"
@@ -82,6 +88,7 @@ services:
   gateway:
     build: ./gateway
     ports:
+      # Gateway is the single public entry point — only this port is exposed on the host.
       - "4000:4000"
     depends_on:
       auth-service:
@@ -95,7 +102,10 @@ services:
       EXTERNAL_SERVICES_URL: "${EXTERNAL_SERVICES_URL}"
       REDIS_URL: "${REDIS_URL}"
       JWKS_URL: "${JWKS_URL}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3000}"
       PORT: "4000"
+      # SEC-08: pre-shared secret for /internal/notify endpoint authentication
+      INTERNAL_SECRET: "${INTERNAL_SECRET}"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:4000/health || exit 1"]
       interval: 10s

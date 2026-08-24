@@ -46,7 +46,7 @@ func (h *Handler) ListProjectMembers(c *kai.Context) {
 	for i, m := range memberRows {
 		userIDs[i] = m.userID
 	}
-	userInfo := h.batchFetchUsers(userIDs)
+	userInfo := h.batchFetchUsers(userIDs, getCallerToken(c))
 
 	members := []map[string]interface{}{}
 	for _, m := range memberRows {
@@ -110,13 +110,13 @@ func (h *Handler) InviteToProject(c *kai.Context) {
 	h.db.QueryRow(`SELECT name FROM core.projects WHERE id = $1`, projectID).Scan(&projectName)
 
 	inviterName := "A teammate"
-	if callerIDs, ok := h.batchFetchUsers([]string{callerID})[callerID]; ok {
+	if callerIDs, ok := h.batchFetchUsers([]string{callerID}, getCallerToken(c))[callerID]; ok {
 		if name, ok := callerIDs["name"].(string); ok && name != "" {
 			inviterName = name
 		}
 	}
 
-	inviteeInfo, err := h.fetchUserByEmail(email)
+	inviteeInfo, err := h.fetchUserByEmail(email, getCallerToken(c))
 	var inviteeID string
 	if inviteeInfo != nil {
 		if id, ok := inviteeInfo["id"].(string); ok {
@@ -128,7 +128,7 @@ func (h *Handler) InviteToProject(c *kai.Context) {
 
 	if err != nil || inviteeInfo == nil || inviteeID == "" {
 		// User account does not exist yet (or has no valid UUID) — send sign-up invitation email with JWT token (non-blocking)
-		h.sendInviteEmail(email, inviterName, projectName, projectID, role, inviteToken, false)
+		h.sendInviteEmail(email, inviterName, projectName, projectID, role, inviteToken, getCallerToken(c), false)
 		c.JSON(201, map[string]interface{}{
 			"id":        "pending-" + email,
 			"name":      email,
@@ -159,7 +159,7 @@ func (h *Handler) InviteToProject(c *kai.Context) {
 	}
 
 	// Fire invite email for existing user with JWT token
-	h.sendInviteEmail(email, inviterName, projectName, projectID, role, inviteToken, true)
+	h.sendInviteEmail(email, inviterName, projectName, projectID, role, inviteToken, getCallerToken(c), true)
 
 	c.JSON(201, map[string]interface{}{
 		"id":        inviteeID,
@@ -203,9 +203,8 @@ func (h *Handler) JoinProjectViaInvite(c *kai.Context) {
 		callerEmail, _ = emailVal.(string)
 	}
 	if callerEmail == "" {
-		callerUsers := h.batchFetchUsers([]string{userID})
-		if callerInfo := callerUsers[userID]; callerInfo != nil {
-			callerEmail, _ = callerInfo["email"].(string)
+		if callerUsers := h.batchFetchUsers([]string{userID}, getCallerToken(c)); callerUsers[userID] != nil {
+			callerEmail, _ = callerUsers[userID]["email"].(string)
 		}
 	}
 

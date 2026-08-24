@@ -143,14 +143,6 @@ export class ProxyService {
     }
   }
 
-  async joinProject(projectId: string, context: any) {
-    const { data } = await axios.post(
-      `${this.coreUrl}/api/projects/${projectId}/join`,
-      {},
-      { headers: this.getHeaders(context) },
-    );
-    return data;
-  }
 
   async joinProjectWithInvite(token: string, context: any) {
     const { data } = await axios.post(

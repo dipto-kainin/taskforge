@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/dipto-kainin/kai"
@@ -54,6 +55,16 @@ func getUserID(c *kai.Context) string {
 	return ""
 }
 
+// getCallerToken extracts the raw JWT string from the Authorization header.
+// Used to forward the caller's credentials to auth-service for SEC-07 internal calls.
+func getCallerToken(c *kai.Context) string {
+	auth := c.Header("Authorization")
+	if len(auth) > 7 && auth[:7] == "Bearer " {
+		return auth[7:]
+	}
+	return ""
+}
+
 // getCallerRole returns the caller's role in a project ("owner", "admin", "member") or "" if not a member.
 func (h *Handler) getCallerRole(projectID, userID string) string {
 	var role string
@@ -68,7 +79,8 @@ func (h *Handler) getCallerRole(projectID, userID string) string {
 }
 
 // batchFetchUsers fetches user info from auth-service for a list of user IDs.
-func (h *Handler) batchFetchUsers(userIDs []string) map[string]map[string]interface{} {
+// callerToken is the caller's Bearer token, forwarded to satisfy auth-service auth (SEC-07).
+func (h *Handler) batchFetchUsers(userIDs []string, callerToken string) map[string]map[string]interface{} {
 	result := map[string]map[string]interface{}{}
 	if len(userIDs) == 0 {
 		return result
@@ -76,7 +88,18 @@ func (h *Handler) batchFetchUsers(userIDs []string) map[string]map[string]interf
 
 	payload := map[string]interface{}{"ids": userIDs}
 	jsonData, _ := json.Marshal(payload)
-	resp, err := http.Post(h.authServiceURL+"/api/users/batch", "application/json", bytes.NewBuffer(jsonData))
+
+	req, err := http.NewRequest(http.MethodPost, h.authServiceURL+"/api/users/batch", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("WARNING: failed to build batch users request: %v", err)
+		return result
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if callerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+callerToken)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Printf("WARNING: failed to batch fetch users: %v", err)
 		return result
@@ -96,8 +119,16 @@ func (h *Handler) batchFetchUsers(userIDs []string) map[string]map[string]interf
 }
 
 // fetchUserByEmail resolves an email to user info via auth-service.
-func (h *Handler) fetchUserByEmail(email string) (map[string]interface{}, error) {
-	resp, err := http.Get(h.authServiceURL + "/api/users/by-email?email=" + email)
+// callerToken is the caller's Bearer token, forwarded to satisfy auth-service auth (SEC-07).
+func (h *Handler) fetchUserByEmail(email, callerToken string) (map[string]interface{}, error) {
+	req, err := http.NewRequest(http.MethodGet, h.authServiceURL+"/api/users/by-email?email="+email, nil)
+	if err != nil {
+		return nil, err
+	}
+	if callerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+callerToken)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +176,13 @@ func (h *Handler) notifyGateway(issueID, eventType string, data map[string]inter
 	}
 	jsonData, _ := json.Marshal(payload)
 
-	resp, err := http.Post(h.gatewayNotifyURL, "application/json", bytes.NewBuffer(jsonData))
+	req, _ := http.NewRequest(http.MethodPost, h.gatewayNotifyURL, bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+	// SEC-08: add pre-shared secret so gateway can verify this is a legitimate internal call
+	if secret := os.Getenv("INTERNAL_SECRET"); secret != "" {
+		req.Header.Set("X-Internal-Secret", secret)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Printf("WARNING: failed to notify gateway for issue %s: %v", issueID, err)
 		return
@@ -155,8 +192,9 @@ func (h *Handler) notifyGateway(issueID, eventType string, data map[string]inter
 
 // sendInviteEmail fires an async HTTP call to the mail service after a successful invite.
 // Non-blocking — runs in a goroutine so invite response is not delayed by email delivery.
+// callerToken is forwarded as Authorization so external-services can auth the request (SEC-03).
 func (h *Handler) sendInviteEmail(
-	toEmail, inviterName, projectName, projectID, role, token string,
+	toEmail, inviterName, projectName, projectID, role, token, callerToken string,
 	inviteeExists bool,
 ) {
 	if h.mailServiceURL == "" {
@@ -175,11 +213,16 @@ func (h *Handler) sendInviteEmail(
 			"invitee_exists": inviteeExists,
 		}
 		jsonData, _ := json.Marshal(payload)
-		resp, err := http.Post(
-			h.mailServiceURL+"/api/mail/invite",
-			"application/json",
-			bytes.NewBuffer(jsonData),
-		)
+		req, err := http.NewRequest(http.MethodPost, h.mailServiceURL+"/api/mail/invite", bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Printf("WARNING: failed to build invite email request to %s: %v", toEmail, err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if callerToken != "" {
+			req.Header.Set("Authorization", "Bearer "+callerToken)
+		}
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			log.Printf("WARNING: failed to send invite email to %s: %v", toEmail, err)
 			return

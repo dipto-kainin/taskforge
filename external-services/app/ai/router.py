@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from app.ai.project_keys import ProjectKeyService
 from app.ai.service import AIService
+from app.auth.jwks_auth import require_internal_auth
 from app.database import Database
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ class SetKeyRequest(BaseModel):
 async def set_project_api_key(
     req: SetKeyRequest,
     key_service: ProjectKeyService = Depends(get_key_service),
+    _claims: dict = Depends(require_internal_auth),  # SEC-03: auth required
 ):
     """Store an encrypted LLM API key for a project. Raw key never reaches the DB."""
     try:
@@ -62,6 +64,7 @@ async def set_project_api_key(
 async def remove_project_api_key(
     project_id: str,
     key_service: ProjectKeyService = Depends(get_key_service),
+    _claims: dict = Depends(require_internal_auth),  # SEC-03: auth required
 ):
     """Remove the LLM API key for a project."""
     await key_service.remove_key(project_id)

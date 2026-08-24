@@ -40,6 +40,12 @@ func (h *Handler) CreateIssue(c *kai.Context) {
 		return
 	}
 
+	// SEC-02: verify caller is a member of this project
+	if h.getCallerRole(projectID, reporterID) == "" {
+		c.JSON(403, map[string]string{"error": "you are not a member of this project"})
+		return
+	}
+
 	var seqVal int
 	if err = h.db.QueryRow(`SELECT nextval('core.issue_key_seq')`).Scan(&seqVal); err != nil {
 		c.JSON(500, map[string]string{"error": "failed to generate issue key"})
@@ -117,6 +123,13 @@ func (h *Handler) GetIssue(c *kai.Context) {
 		return
 	}
 
+	// SEC-02: verify caller is a member of this issue's project
+	userID := getUserID(c)
+	if h.getCallerRole(projectID, userID) == "" {
+		c.JSON(403, map[string]string{"error": "you are not a member of this project"})
+		return
+	}
+
 	issue := map[string]interface{}{
 		"id": issueID, "project_id": projectID, "key": issueKey, "title": title,
 		"description": description, "type": issueType, "status": status, "priority": priority,
@@ -165,6 +178,22 @@ func (h *Handler) UpdateIssue(c *kai.Context) {
 	data, err := c.GetJSON()
 	if err != nil {
 		c.JSON(400, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	// SEC-02: fetch project_id from issue first, then verify membership
+	var issueProjectID string
+	if err = h.db.QueryRow(`SELECT project_id FROM core.issues WHERE id = $1`, id).Scan(&issueProjectID); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(404, map[string]string{"error": "issue not found"})
+		} else {
+			c.JSON(500, map[string]string{"error": "database error"})
+		}
+		return
+	}
+	updaterID := getUserID(c)
+	if h.getCallerRole(issueProjectID, updaterID) == "" {
+		c.JSON(403, map[string]string{"error": "you are not a member of this project"})
 		return
 	}
 
@@ -239,6 +268,22 @@ func (h *Handler) UpdateIssue(c *kai.Context) {
 
 func (h *Handler) DeleteIssue(c *kai.Context) {
 	id := c.Param("id")
+
+	// SEC-02: fetch project_id from issue first, then verify membership
+	var issueProjectID string
+	if err := h.db.QueryRow(`SELECT project_id FROM core.issues WHERE id = $1`, id).Scan(&issueProjectID); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(404, map[string]string{"error": "issue not found"})
+		} else {
+			c.JSON(500, map[string]string{"error": "database error"})
+		}
+		return
+	}
+	deleterID := getUserID(c)
+	if h.getCallerRole(issueProjectID, deleterID) == "" {
+		c.JSON(403, map[string]string{"error": "you are not a member of this project"})
+		return
+	}
 	result, err := h.db.Exec(`DELETE FROM core.issues WHERE id = $1`, id)
 	if err != nil {
 		c.JSON(500, map[string]string{"error": "failed to delete issue: " + err.Error()})

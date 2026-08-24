@@ -139,6 +139,13 @@ func (h *Handler) GetProject(c *kai.Context) {
 		return
 	}
 
+	// SEC-02: verify caller is a member of this project before returning data
+	userID := getUserID(c)
+	if h.getCallerRole(projectID, userID) == "" {
+		c.JSON(403, map[string]string{"error": "you are not a member of this project"})
+		return
+	}
+
 	c.JSON(200, map[string]interface{}{
 		"id": projectID, "key": key, "name": name,
 		"description": desc, "created_at": createdAt,

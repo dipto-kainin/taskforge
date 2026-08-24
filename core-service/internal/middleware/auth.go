@@ -121,6 +121,11 @@ func validateJWT(tokenStr string) (map[string]interface{}, error) {
 		}
 	}
 
+	// SEC-05: reject refresh tokens used as access tokens
+	if tokenType, ok := claims["token_type"].(string); ok && tokenType == "refresh" {
+		return nil, fmt.Errorf("token type not permitted: refresh tokens cannot be used for API access")
+	}
+
 	return claims, nil
 }
 

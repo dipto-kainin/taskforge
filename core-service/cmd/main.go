@@ -93,7 +93,6 @@ func main() {
 	api.GET("/projects", authMW, h.ListProjects)           // user-scoped: returns only projects the caller is a member of
 	api.POST("/projects/join", authMW, h.JoinProject)
 	api.POST("/projects/join-invite", authMW, h.JoinProjectViaInvite)
-	api.POST("/projects/:id/join", authMW, h.JoinProjectByID)
 	api.POST("/projects/:id/join-codes", authMW, h.GenerateJoinCode)
 	api.GET("/projects/:id/join-codes/active", authMW, h.GetActiveJoinCode)
 	api.GET("/projects/:id", authMW, h.GetProject)

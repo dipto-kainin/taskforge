@@ -24,7 +24,9 @@ type InviteClaims struct {
 func getSecretKey() []byte {
 	secret := os.Getenv("SECRET_KEY")
 	if secret == "" {
-		secret = "taskforge-default-invite-secret-key-2026"
+		// SEC-06: fail loudly — a missing SECRET_KEY would otherwise fall back to a
+		// publicly-known string, allowing anyone to forge invite tokens for any role.
+		panic("SECRET_KEY environment variable is required but not set; refusing to start with insecure default")
 	}
 	return []byte(secret)
 }

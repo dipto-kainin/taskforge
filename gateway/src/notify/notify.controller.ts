@@ -1,4 +1,11 @@
-import { Controller, Post, Body, HttpCode } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  Headers,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { PubSubService } from '../services/pubsub.service';
 
 @Controller('internal')
@@ -9,10 +16,22 @@ export class NotifyController {
    * POST /internal/notify
    * Receives notifications from core-service, publishes them via Redis pub/sub
    * and GraphQL subscriptions for real-time WebSocket delivery to connected clients.
+   *
+   * SEC-08 fix: requires X-Internal-Secret header matching INTERNAL_SECRET env var.
+   * This prevents any external caller who knows a project ID from injecting arbitrary
+   * events into clients' real-time feeds.
    */
   @Post('notify')
   @HttpCode(200)
-  async notify(@Body() body: any) {
+  async notify(
+    @Body() body: any,
+    @Headers('x-internal-secret') secret: string,
+  ) {
+    const expectedSecret = process.env.INTERNAL_SECRET;
+    if (!expectedSecret || secret !== expectedSecret) {
+      throw new UnauthorizedException('Invalid or missing internal secret');
+    }
+
     const projectId = body.project_id || body.projectId;
 
     if (!projectId) {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"time"
 
@@ -8,12 +9,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// generateRandomCode returns a cryptographically random 6-character join code.
+// Uses crypto/rand so the full charset (32 chars) is sampled uniformly,
+// giving 32^6 ≈ 1 billion unique codes (SEC-01 fix).
 func generateRandomCode() string {
 	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	raw := make([]byte, 6)
+	if _, err := rand.Read(raw); err != nil {
+		panic("crypto/rand unavailable: " + err.Error())
+	}
 	b := make([]byte, 6)
-	now := time.Now().UnixNano()
-	for i := range b {
-		b[i] = chars[(now+int64(i*137))%int64(len(chars))]
+	for i, r := range raw {
+		b[i] = chars[int(r)%len(chars)]
 	}
 	return string(b)
 }
@@ -209,38 +216,4 @@ func (h *Handler) JoinProject(c *kai.Context) {
 	})
 }
 
-// JoinProjectByID allows an authenticated user with an invite link to join a project by project ID.
-func (h *Handler) JoinProjectByID(c *kai.Context) {
-	projectID := c.Param("id")
-	userID := getUserID(c)
 
-	if userID == "" {
-		c.JSON(401, map[string]string{"error": "unauthorized"})
-		return
-	}
-
-	var key, name, desc string
-	err := h.db.QueryRow(
-		`SELECT key, name, description FROM core.projects WHERE id = $1`, projectID,
-	).Scan(&key, &name, &desc)
-
-	if err != nil {
-		c.JSON(404, map[string]string{"error": "project not found"})
-		return
-	}
-
-	_, err = h.db.Exec(
-		`INSERT INTO core.project_members (project_id, user_id, role)
-		 VALUES ($1, $2, 'member')
-		 ON CONFLICT (project_id, user_id) DO NOTHING`,
-		projectID, userID,
-	)
-	if err != nil {
-		c.JSON(500, map[string]string{"error": "failed to join project"})
-		return
-	}
-
-	c.JSON(200, map[string]interface{}{
-		"id": projectID, "key": key, "name": name, "description": desc,
-	})
-}
