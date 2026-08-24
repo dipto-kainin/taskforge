@@ -188,7 +188,7 @@ func (h *Handler) GetDashboard(c *kai.Context) {
 	for id := range memberUserIDSet {
 		allUserIDs = append(allUserIDs, id)
 	}
-	userInfo := h.batchFetchUsers(allUserIDs)
+	userInfo := h.batchFetchUsers(allUserIDs, getCallerToken(c))
 
 	// ── 6. Build response ─────────────────────────────────────────────────────
 
