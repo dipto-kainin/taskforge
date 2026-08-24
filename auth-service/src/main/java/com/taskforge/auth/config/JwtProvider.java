@@ -50,8 +50,26 @@ public class JwtProvider {
         String rsaKeyEnv = System.getenv("RSA_PRIVATE_KEY");
 
         if (rsaKeyEnv != null && !rsaKeyEnv.isBlank()) {
-            // SEC-04: load persisted key from environment variable (Render-compatible)
-            byte[] keyBytes = Base64.getDecoder().decode(rsaKeyEnv.trim());
+            // RSA_PRIVATE_KEY is base64-encoded. The encoded content may be either:
+            //   a) Raw DER bytes (PKCS#8)  — if generated via openssl ... -outform DER | base64
+            //   b) PEM text                — if generated via openssl genrsa ... | base64
+            // We detect case (b) by checking for the PEM header after the first decode.
+            byte[] firstDecode = Base64.getDecoder().decode(rsaKeyEnv.trim());
+            String firstDecodeStr = new String(firstDecode, java.nio.charset.StandardCharsets.US_ASCII);
+
+            byte[] keyBytes;
+            if (firstDecodeStr.contains("-----BEGIN")) {
+                // Case (b): PEM text was base64-encoded. Strip headers and decode body.
+                String pemBody = firstDecodeStr
+                        .replaceAll("-----BEGIN[^-]*-----", "")
+                        .replaceAll("-----END[^-]*-----", "")
+                        .replaceAll("\\s+", "");
+                keyBytes = Base64.getDecoder().decode(pemBody);
+            } else {
+                // Case (a): already raw DER bytes.
+                keyBytes = firstDecode;
+            }
+
             KeyFactory kf = KeyFactory.getInstance("RSA");
             this.privateKey = (RSAPrivateKey) kf.generatePrivate(new PKCS8EncodedKeySpec(keyBytes));
 
