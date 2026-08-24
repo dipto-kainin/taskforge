@@ -1,13 +1,65 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import axios from 'axios';
 import { GraphQLError } from 'graphql';
 
 @Injectable()
-export class ProxyService {
+export class ProxyService implements OnModuleInit {
+  private readonly logger = new Logger(ProxyService.name);
   private authUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:8080';
   private coreUrl = process.env.CORE_SERVICE_URL || 'http://localhost:8081';
   private searchUrl = process.env.EXTERNAL_SERVICES_URL || 'http://localhost:8000';
   private servicesUrl = process.env.EXTERNAL_SERVICES_URL || 'http://localhost:8000'; // services platform
+
+  /**
+   * Fire-and-forget warmup pings on gateway startup.
+   * Triggers Render free-tier cold starts for downstream services in parallel
+   * so they are ready by the time the first real GraphQL request comes in.
+   */
+  onModuleInit() {
+    const ping = async (name: string, url: string) => {
+      try {
+        await axios.get(url, { timeout: 60_000 });
+        this.logger.log(`Warmup OK: ${name}`);
+      } catch {
+        this.logger.warn(`Warmup: ${name} still starting up`);
+      }
+    };
+    ping('auth-service',      `${this.authUrl}/.well-known/jwks.json`);
+    ping('core-service',      `${this.coreUrl}/health`);
+    if (process.env.EXTERNAL_SERVICES_URL) {
+      ping('external-services', `${this.searchUrl}/health`);
+    }
+  }
+
+  /**
+   * Retries fn up to maxAttempts times, waiting delayMs between attempts.
+   * Only retries on network/connection errors or 502/503/504 responses
+   * (i.e. the downstream service is cold-starting). Auth errors (401/403/400)
+   * are NOT retried — they should propagate immediately.
+   */
+  private async withRetry<T>(
+    fn: () => Promise<T>,
+    { maxAttempts = 3, delayMs = 5000, label = '' } = {},
+  ): Promise<T> {
+    let lastErr: any;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        lastErr = err;
+        const isRetryable =
+          !err?.response || // network/connection error (service sleeping)
+          [502, 503, 504].includes(err?.response?.status); // bad gateway / unavailable
+
+        if (!isRetryable || attempt === maxAttempts) throw err;
+        this.logger.warn(
+          `${label} failed (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs / 1000}s…`,
+        );
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+    throw lastErr;
+  }
 
   constructor() {
     axios.interceptors.response.use(
@@ -52,6 +104,7 @@ export class ProxyService {
     return headers;
   }
 
+
   // ---- Auth Service ----
 
   async register(input: any) {
@@ -81,16 +134,18 @@ export class ProxyService {
   // ---- Core Service — Projects ----
 
   async getMyProjects(context: any) {
-    const { data } = await axios.get(`${this.coreUrl}/api/projects`, {
-      headers: this.getHeaders(context),
-    });
+    const { data } = await this.withRetry(
+      () => axios.get(`${this.coreUrl}/api/projects`, { headers: this.getHeaders(context) }),
+      { label: 'getMyProjects' },
+    );
     return data;
   }
 
   async getDashboard(context: any) {
-    const { data } = await axios.get(`${this.coreUrl}/api/dashboard`, {
-      headers: this.getHeaders(context),
-    });
+    const { data } = await this.withRetry(
+      () => axios.get(`${this.coreUrl}/api/dashboard`, { headers: this.getHeaders(context) }),
+      { label: 'getDashboard' },
+    );
     return data;
   }
 
